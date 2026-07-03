@@ -123,42 +123,68 @@ function buildFilters() {
     o.textContent = `${state.typeLabels[t]} (${typeCounts[t].toLocaleString()})`;
     typeSel.appendChild(o);
   }
-  const years = state.meta.years;
-  for (const [sel, def] of [["#f-year-from", years[0]], ["#f-year-to", years[years.length - 1]]]) {
+  for (const [sel, def] of [["#f-date-from", state.meta.first_date],
+                            ["#f-date-to", state.meta.last_date]]) {
     const el = $(sel);
-    for (const y of years) {
-      const o = document.createElement("option");
-      o.value = y; o.textContent = y;
-      el.appendChild(o);
-    }
+    el.min = state.meta.first_date;
+    el.max = state.meta.last_date;
     el.value = def;
   }
   let deb;
   $("#f-search").addEventListener("input", () => { clearTimeout(deb); deb = setTimeout(applyFilters, 180); });
-  for (const id of ["#f-leader", "#f-type", "#f-year-from", "#f-year-to", "#f-activity"])
+  for (const id of ["#f-leader", "#f-type", "#f-date-from", "#f-date-to",
+                    "#f-activity", "#f-fulltext"])
     $(id).addEventListener("change", applyFilters);
   $("#more-btn").addEventListener("click", () => renderList(true));
 }
 
-function applyFilters() {
+function loadYearDetail(year) {
+  if (!state.yearDetail[year])
+    state.yearDetail[year] = fetch(`data/events-${year}.json`).then((r) => r.json());
+  return state.yearDetail[year];
+}
+
+let filterToken = 0;
+async function applyFilters() {
+  const token = ++filterToken;
   const q = $("#f-search").value.trim().toLowerCase();
   const leader = $("#f-leader").value;
   const type = $("#f-type").value;
-  const y0 = $("#f-year-from").value, y1 = $("#f-year-to").value;
+  const d0 = $("#f-date-from").value || state.meta.first_date;
+  const d1 = $("#f-date-to").value || state.meta.last_date;
   const activityOnly = $("#f-activity").checked;
+  const fullText = $("#f-fulltext").checked;
+
+  // Full-text mode: make sure the transcript shards for the selected date
+  // range are loaded before filtering (cached after first use).
+  let contentByYear = null;
+  if (fullText && q) {
+    const years = state.meta.years.filter(
+      (y) => y >= d0.slice(0, 4) && y <= d1.slice(0, 4));
+    $("#result-count").textContent = "Loading full transcripts…";
+    contentByYear = {};
+    await Promise.all(years.map(async (y) => {
+      contentByYear[y] = await loadYearDetail(y);
+    }));
+    if (token !== filterToken) return; // superseded by a newer filter change
+  }
 
   state.filtered = state.events.filter((e) => {
-    const y = e.date.slice(0, 4);
-    if (y < y0 || y > y1) return false;
+    if (e.date < d0 || e.date > d1) return false;
     if (type && e.type !== type) return false;
     if (activityOnly && !e.activity) return false;
     if (leader && !e.leaders.includes(leader) && !e.mentions.includes(leader)) return false;
-    if (q && !haystack(e).includes(q)) return false;
+    if (q && !haystack(e).includes(q)) {
+      if (!contentByYear) return false;
+      const det = (contentByYear[e.date.slice(0, 4)] || {})[e.id];
+      if (!det || !det.content_zh.toLowerCase().includes(q)) return false;
+    }
     return true;
   });
   $("#result-count").textContent =
-    `${state.filtered.length.toLocaleString()} events` + (q ? ` matching “${q}”` : "");
-  drawChart(state.filtered);
+    `${state.filtered.length.toLocaleString()} events` +
+    (q ? ` matching “${q}”${fullText ? " (incl. full text)" : ""}` : "");
+  drawChart(state.filtered, d0, d1);
   renderList(false);
 }
 
@@ -225,7 +251,7 @@ function esc(s) {
 }
 
 /* ---------------- monthly chart ---------------- */
-function drawChart(events) {
+function drawChart(events, d0, d1) {
   const svg = $("#chart-svg");
   svg.innerHTML = "";
   const counts = new Map();
@@ -233,13 +259,13 @@ function drawChart(events) {
     const m = e.date.slice(0, 7);
     counts.set(m, (counts.get(m) || 0) + 1);
   }
-  const y0 = +$("#f-year-from").value, y1 = +$("#f-year-to").value;
+  const m0 = d0.slice(0, 7), m1 = d1.slice(0, 7);
   const months = [];
-  for (let y = y0; y <= y1; y++)
+  for (let y = +d0.slice(0, 4); y <= +d1.slice(0, 4); y++)
     for (let m = 1; m <= 12; m++) {
       const key = `${y}-${String(m).padStart(2, "0")}`;
-      if (key > state.meta.last_date.slice(0, 7)) break;
-      if (key < state.meta.first_date.slice(0, 7)) continue;
+      if (key > m1) break;
+      if (key < m0) continue;
       months.push(key);
     }
   if (!months.length) return;

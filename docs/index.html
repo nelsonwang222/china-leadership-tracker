@@ -31,9 +31,10 @@
       <input type="search" id="f-search" placeholder="Search keywords, names, places (English or 中文)…">
       <select id="f-leader"><option value="">All leaders</option></select>
       <select id="f-type"><option value="">All event types</option></select>
-      <select id="f-year-from"></select>
-      <select id="f-year-to"></select>
+      <input type="date" id="f-date-from" title="From date">
+      <input type="date" id="f-date-to" title="To date">
       <label class="chk"><input type="checkbox" id="f-activity"> leader activities only</label>
+      <label class="chk" title="Also match the original Chinese transcript text (downloads the transcripts for the selected date range on first use)"><input type="checkbox" id="f-fulltext"> search full text 原文</label>
     </div>
 
     <div class="chart-card">
@@ -88,11 +89,9 @@
       <li>English summaries are machine-generated and should be checked against the Chinese original before quotation.</li>
     </ul>
 
-    <h3>Related resources</h3>
+    <h3>Source</h3>
     <ul>
-      <li><a href="https://asiasociety.org/policy-institute/decoding-chinese-politics" target="_blank" rel="noopener">Asia Society Policy Institute — Decoding Chinese Politics</a></li>
-      <li><a href="https://propagandascope.org/" target="_blank" rel="noopener">PropagandaScope</a></li>
-      <li><a href="https://tv.cctv.com/lm/xwlb/" target="_blank" rel="noopener">CCTV Xinwen Lianbo official page (source)</a></li>
+      <li><a href="https://tv.cctv.com/lm/xwlb/" target="_blank" rel="noopener">CCTV Xinwen Lianbo official program page</a></li>
     </ul>
 
     <h3>Data access</h3>

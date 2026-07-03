@@ -84,7 +84,7 @@ main { padding-top: 22px; }
   color: var(--ink); background: var(--surface);
   border: 1px solid var(--border); border-radius: 8px;
 }
-.filters select, .filters input[type="number"] {
+.filters select, .filters input[type="number"], .filters input[type="date"] {
   padding: 8px 10px; font: inherit; font-size: 14px;
   color: var(--ink); background: var(--surface);
   border: 1px solid var(--border); border-radius: 8px;
