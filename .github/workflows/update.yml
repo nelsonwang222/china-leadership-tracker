@@ -4,11 +4,13 @@ on:
   schedule:
     - cron: "30 14 * * *"   # 22:30 Beijing — after the 19:00 broadcast transcript is posted
     - cron: "30 23 * * *"   # next-morning catch-up for late transcripts
+    # Temporary while the translation backlog clears (harmless no-ops after):
+    - cron: "15 2,5,8,11,17,20 * * *"
   workflow_dispatch:
     inputs:
       translate_limit:
         description: "Max events to translate this run (0 = skip)"
-        default: "300"
+        default: "2500"
 
 permissions:
   contents: write
@@ -38,7 +40,7 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           TRANSLATE_MODEL: ${{ vars.TRANSLATE_MODEL }}
-        run: python -m pipeline.translate ${{ github.event.inputs.translate_limit || '300' }}
+        run: python -m pipeline.translate ${{ github.event.inputs.translate_limit || '2500' }}
 
       - name: Rebuild site data
         run: python -m pipeline.build
