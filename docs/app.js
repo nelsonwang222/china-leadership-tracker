@@ -64,6 +64,7 @@ async function boot() {
   buildNetworkControls();
   applyFilters();
   wireTabs();
+  prefetchTranscripts();
 
   // deep link: #leader=xi-jinping or #q=term
   const h = new URLSearchParams(location.hash.slice(1));
@@ -142,6 +143,18 @@ function loadYearDetail(year) {
   if (!state.yearDetail[year])
     state.yearDetail[year] = fetch(`data/events-${year}.json`).then((r) => r.json());
   return state.yearDetail[year];
+}
+
+// Full-text search is on by default, so quietly warm the transcript cache
+// (newest year first) shortly after load; searches reuse the same promises.
+function prefetchTranscripts() {
+  const years = [...state.meta.years].reverse();
+  let i = 0;
+  const next = () => {
+    if (i >= years.length) return;
+    loadYearDetail(years[i++]).catch(() => {}).finally(() => setTimeout(next, 250));
+  };
+  setTimeout(next, 1200);
 }
 
 let filterToken = 0;
