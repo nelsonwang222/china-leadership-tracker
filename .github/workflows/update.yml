@@ -1,0 +1,52 @@
+name: Daily update
+
+on:
+  schedule:
+    - cron: "30 14 * * *"   # 22:30 Beijing — after the 19:00 broadcast transcript is posted
+    - cron: "30 23 * * *"   # next-morning catch-up for late transcripts
+  workflow_dispatch:
+    inputs:
+      translate_limit:
+        description: "Max events to translate this run (0 = skip)"
+        default: "300"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: daily-update
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: Fetch new transcripts
+        run: python -m pipeline.backfill
+
+      - name: Translate (skipped when no API key secret is set)
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          TRANSLATE_MODEL: ${{ vars.TRANSLATE_MODEL }}
+        run: python -m pipeline.translate ${{ github.event.inputs.translate_limit || '300' }}
+
+      - name: Rebuild site data
+        run: python -m pipeline.build
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet && echo "No changes." && exit 0
+          git commit -m "Daily update $(date -u +%F)"
+          git push
