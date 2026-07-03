@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>China Leadership Tracker — Xinwen Lianbo Database</title>
+<meta name="description" content="A searchable English-language database of Chinese leaders' public activities, meetings, and policy events, built daily from CCTV's Xinwen Lianbo news broadcast.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📺</text></svg>">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="site">
+  <div class="wrap">
+    <h1>China Leadership Tracker <span class="zh">新闻联播数据库</span></h1>
+    <p class="sub">Daily-updated database of Chinese leaders' public activities, meetings, and policy events, extracted from CCTV's <em>Xinwen Lianbo</em> evening news broadcast. <span id="meta-line"></span></p>
+    <nav class="tabs">
+      <button data-view="events" class="active">Events</button>
+      <button data-view="leaders">Leaders</button>
+      <button data-view="network">Network</button>
+      <button data-view="about">About</button>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <!-- ================= EVENTS ================= -->
+  <section id="view-events" class="view active">
+    <div class="filters">
+      <input type="search" id="f-search" placeholder="Search keywords, names, places (English or 中文)…">
+      <select id="f-leader"><option value="">All leaders</option></select>
+      <select id="f-type"><option value="">All event types</option></select>
+      <select id="f-year-from"></select>
+      <select id="f-year-to"></select>
+      <label class="chk"><input type="checkbox" id="f-activity"> leader activities only</label>
+    </div>
+
+    <div class="chart-card">
+      <h3 id="chart-title">Matching events per month</h3>
+      <svg id="chart-svg" preserveAspectRatio="none"></svg>
+    </div>
+
+    <p class="count-note" id="result-count"></p>
+    <div id="event-list"></div>
+    <button class="more-btn" id="more-btn" hidden>Show more</button>
+  </section>
+
+  <!-- ================= LEADERS ================= -->
+  <section id="view-leaders" class="view">
+    <div class="tier-legend" id="tier-legend"></div>
+    <div class="leader-grid" id="leader-grid"></div>
+  </section>
+
+  <!-- ================= NETWORK ================= -->
+  <section id="view-network" class="view">
+    <div class="filters">
+      <select id="n-year-from"></select>
+      <select id="n-year-to"></select>
+      <label class="chk">min co-appearances
+        <input type="number" id="n-min" value="5" min="1" max="200" style="width:70px">
+      </label>
+      <label class="chk"><input type="checkbox" id="n-mentions" checked> include mentions</label>
+    </div>
+    <div class="tier-legend" id="net-legend"></div>
+    <svg id="network-svg"></svg>
+    <div class="net-info" id="net-info">Nodes are leaders sized by joint public appearances; a link means two figures appeared in the same <em>Xinwen Lianbo</em> item. Click a node to inspect; click the background to reset.</div>
+  </section>
+
+  <!-- ================= ABOUT ================= -->
+  <section id="view-about" class="view prose">
+    <h3>What this is</h3>
+    <p><em>Xinwen Lianbo</em> (新闻联播) is China's flagship 7 p.m. news program, simulcast nationally by CCTV. Its running order and wording are a curated official record of what the party-state wants known about its leaders: who met whom, who inspected what, which meetings were chaired, and which policy language was used. This site turns the full text of every broadcast since <b>February 2016</b> into a structured, searchable, English-accessible database, updated automatically every day.</p>
+
+    <h3>How it is built</h3>
+    <ul>
+      <li><b>Collection.</b> Each day's transcript is downloaded from CCTV's public program pages shortly after broadcast.</li>
+      <li><b>Extraction.</b> Every news item is scanned against a roster of ~58 senior figures (Politburo members of the 18th–20th Central Committees, state leaders, and key ministers). Items are classified by rule into event types — meetings, bilateral talks, inspection tours, chaired meetings, phone calls, congratulatory messages, foreign trips, ceremonies, NPC/CPPCC deliberations, and more.</li>
+      <li><b>Translation.</b> English titles and one-to-two-sentence analytic summaries are produced with a large language model and cached; the original Chinese text is always preserved and shown alongside.</li>
+      <li><b>Network.</b> The co-appearance graph counts how often two roster figures appear in the same news item — a standard proxy for elite proximity used in scholarship on Chinese politics.</li>
+    </ul>
+
+    <h3>Caveats for researchers</h3>
+    <ul>
+      <li>The source is state media: coverage reflects official signaling, not the full universe of leadership activity. Absence from <em>Xinwen Lianbo</em> is itself a signal, but interpret it carefully.</li>
+      <li>Event typing is rule-based on headline patterns; a small share of items are classified as <code>other</code> or <code>coverage</code> (thematic propaganda pieces that mention a leader without reporting an activity). The "leader activities only" filter excludes those.</li>
+      <li>Name matching is by exact Chinese name; a leader mentioned by title only (e.g. 总书记 without 习近平) is not captured in that item.</li>
+      <li>English summaries are machine-generated and should be checked against the Chinese original before quotation.</li>
+    </ul>
+
+    <h3>Related resources</h3>
+    <ul>
+      <li><a href="https://asiasociety.org/policy-institute/decoding-chinese-politics" target="_blank" rel="noopener">Asia Society Policy Institute — Decoding Chinese Politics</a></li>
+      <li><a href="https://propagandascope.org/" target="_blank" rel="noopener">PropagandaScope</a></li>
+      <li><a href="https://tv.cctv.com/lm/xwlb/" target="_blank" rel="noopener">CCTV Xinwen Lianbo official page (source)</a></li>
+    </ul>
+
+    <h3>Data access</h3>
+    <p>The underlying data is plain JSON, republished on every update: <code>data/index.json</code> (all events), <code>data/leaders.json</code> (roster), and <code>data/events-YYYY.json</code> (full Chinese text by year). Cite as "China Leadership Tracker, based on CCTV Xinwen Lianbo transcripts."</p>
+  </section>
+
+  <footer class="site">
+    <span id="footer-meta"></span> · Source: CCTV <em>Xinwen Lianbo</em> · Not affiliated with CCTV. Built for research and educational use.
+  </footer>
+</main>
+
+<div class="chart-tip" id="tip"></div>
+<script src="app.js"></script>
+</body>
+</html>
