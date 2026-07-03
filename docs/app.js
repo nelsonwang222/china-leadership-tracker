@@ -482,6 +482,12 @@ function drawNetwork() {
   };
   svg.addEventListener("click", (ev) => { if (ev.target === svg) reset(); });
 
+  const svgPoint = (ev) => {
+    const pt = svg.createSVGPoint();
+    pt.x = ev.clientX; pt.y = ev.clientY;
+    return pt.matrixTransform(svg.getScreenCTM().inverse());
+  };
+
   nodes.sort((a, b) => b.n - a.n);
   for (const n of nodes) {
     const g = document.createElementNS(ns, "g");
@@ -497,7 +503,44 @@ function drawNetwork() {
     t.setAttribute("y", n.y + 4);
     t.textContent = leaderName(n.id);
     g.appendChild(t);
+
+    // Drag to reposition; a small movement still counts as a click.
+    let dragged = false;
+    g.addEventListener("pointerdown", (ev) => {
+      ev.preventDefault();
+      dragged = false;
+      const start = svgPoint(ev);
+      const ox = n.x, oy = n.y;
+      const move = (mv) => {
+        const p = svgPoint(mv);
+        if (Math.abs(p.x - start.x) + Math.abs(p.y - start.y) > 3) dragged = true;
+        n.x = ox + p.x - start.x;
+        n.y = oy + p.y - start.y;
+        c.setAttribute("cx", n.x); c.setAttribute("cy", n.y);
+        t.setAttribute("x", n.x + radius(n) + 3);
+        t.setAttribute("y", n.y + 4);
+        edges.forEach((e, i) => {
+          if (e.a === n.id) {
+            edgeEls[i].setAttribute("x1", n.x);
+            edgeEls[i].setAttribute("y1", n.y);
+          } else if (e.b === n.id) {
+            edgeEls[i].setAttribute("x2", n.x);
+            edgeEls[i].setAttribute("y2", n.y);
+          }
+        });
+      };
+      const up = () => {
+        window.removeEventListener("pointermove", move);
+        window.removeEventListener("pointerup", up);
+        window.removeEventListener("pointercancel", up);
+      };
+      window.addEventListener("pointermove", move);
+      window.addEventListener("pointerup", up);
+      window.addEventListener("pointercancel", up);
+    });
+
     g.addEventListener("click", () => {
+      if (dragged) { dragged = false; return; }
       reset();
       const neighbors = new Set([n.id]);
       const partners = [];
