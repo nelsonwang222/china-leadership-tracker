@@ -60,6 +60,10 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 .venv/bin/python -m http.server -d docs 8000
 ```
 
+## Credits
+
+Conceived, maintained by [Nelson Wang (@nelsonwang222)](https://github.com/nelsonwang222), and co-worked with Claude's Fable 5.
+
 ## Data reuse
 
 All processed data is plain JSON under `docs/data/` and republished daily.
