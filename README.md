@@ -35,17 +35,18 @@ time): it fetches any missing broadcast days, translates new events, rebuilds
 ## English translations
 
 Rule-based extraction and the English UI work with no configuration. Fluent
-English titles and summaries are produced by the Claude API when an
-`ANTHROPIC_API_KEY` repository secret is set:
+English titles and summaries are produced by an LLM when an API-key secret is
+set (repo → Settings → Secrets and variables → Actions):
 
-1. Repo → Settings → Secrets and variables → Actions → new secret
-   `ANTHROPIC_API_KEY`.
-2. Optionally set a repository *variable* `TRANSLATE_MODEL`
-   (default `claude-opus-4-8`; `claude-haiku-4-5` is ~5x cheaper).
+1. Add **either** secret — `GEMINI_API_KEY` (Gemini, default model
+   `gemini-2.5-flash`) or `ANTHROPIC_API_KEY` (Claude, default model
+   `claude-opus-4-8`). If both are set, Claude is used.
+2. Optionally set a repository *variable* `TRANSLATE_MODEL` to override the
+   model for whichever provider is active.
 3. Each daily run translates up to 300 untranslated events (newest first), so
    the historical backlog fills in gradually. To backfill faster, run the
    workflow manually with a higher `translate_limit`, or locally:
-   `ANTHROPIC_API_KEY=... python -m pipeline.translate 5000`.
+   `GEMINI_API_KEY=... python -m pipeline.translate 5000`.
 
 Translations are cached in `data/translations.json` — each event is only ever
 translated once.
