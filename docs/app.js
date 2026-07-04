@@ -4,32 +4,58 @@
 "use strict";
 
 const $ = (sel) => document.querySelector(sel);
-const TIER_NAMES = {
-  1: "Politburo Standing Committee (current)",
-  2: "Politburo (current)",
-  3: "Former PSC",
-  4: "Former Politburo",
-  5: "State leaders / ministers",
+
+const TYPE_CODES = {
+  meeting: "MTG", talks: "BIL", phone_call: "TEL", message: "MSG",
+  chaired_meeting: "CHR", inspection: "INS", foreign_trip: "TRIP",
+  ceremony: "CER", symposium: "SYM", deliberation: "NPC", funeral: "FNR",
+  speech: "SPCH", decree: "DEC", article: "ART", brief: "BRF",
+  coverage: "COV", other: "OTH",
 };
-const TIER_COLORS = {
-  1: "var(--tier1)", 2: "var(--tier2)", 3: "var(--tier3)",
-  4: "var(--tier4)", 5: "var(--tier5)",
-};
+const MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN",
+                "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+const MONTHS_FULL = ["JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE",
+                     "JULY", "AUGUST", "SEPTEMBER", "OCTOBER", "NOVEMBER", "DECEMBER"];
 
 const state = {
-  events: [],          // parsed event objects
+  events: [],
   leaders: [],
   leadersById: {},
   typeLabels: {},
   meta: {},
   filtered: [],
+  monthCounts: new Map(),
   shown: 0,
+  lastMonth: null,
   pageSize: 50,
-  yearDetail: {},      // year -> promise of detail map
+  yearDetail: {},
 };
+
+/* ---------------- theme ---------------- */
+function initTheme() {
+  const btn = $("#theme-btn");
+  const label = () =>
+    (document.documentElement.dataset.theme === "dark" ? "◑ LIGHT" : "◐ DARK");
+  btn.textContent = label();
+  btn.addEventListener("click", () => {
+    const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+    document.documentElement.dataset.theme = next;
+    try { localStorage.setItem("clt-theme", next); } catch (e) {}
+    btn.textContent = label();
+  });
+}
+
+function switchOn(el) { return el.classList.contains("on"); }
+function wireSwitch(el, onChange) {
+  el.addEventListener("click", () => {
+    el.classList.toggle("on");
+    onChange();
+  });
+}
 
 /* ---------------- load ---------------- */
 async function boot() {
+  initTheme();
   const [meta, leaders, index] = await Promise.all([
     fetch("data/meta.json").then((r) => r.json()),
     fetch("data/leaders.json").then((r) => r.json()),
@@ -51,13 +77,12 @@ async function boot() {
       hay: null,
     };
   });
-  // newest first
-  state.events.sort((a, b) => (a.date < b.date ? 1 : -1));
+  state.events.sort((a, b) => (a.date < b.date ? 1 : -1)); // newest first
 
-  $("#meta-line").innerHTML =
-    `Covering <b>${fmtDate(meta.first_date)}</b> – <b>${fmtDate(meta.last_date)}</b>` +
-    ` · ${meta.n_events.toLocaleString()} events from ${meta.n_days.toLocaleString()} broadcasts.`;
-  $("#footer-meta").textContent = `Last updated ${meta.built_at.slice(0, 10)}`;
+  $("#upd-label").textContent = `UPD ${meta.built_at.slice(0, 10)}`;
+  $("#stat-events").textContent = meta.n_events.toLocaleString();
+  $("#stat-leaders").textContent = state.leaders.filter((p) => p.count).length;
+  $("#stat-days").textContent = meta.n_days.toLocaleString();
 
   buildFilters();
   buildLeadersView();
@@ -66,15 +91,9 @@ async function boot() {
   wireTabs();
   prefetchTranscripts();
 
-  // deep link: #leader=xi-jinping or #q=term
   const h = new URLSearchParams(location.hash.slice(1));
   if (h.get("leader")) { $("#f-leader").value = h.get("leader"); applyFilters(); }
   if (h.get("q")) { $("#f-search").value = h.get("q"); applyFilters(); }
-}
-
-function fmtDate(d) {
-  if (!d) return "";
-  return d;
 }
 
 function leaderName(id) {
@@ -102,6 +121,24 @@ function haystack(e) {
   return e.hay;
 }
 
+function loadYearDetail(year) {
+  if (!state.yearDetail[year])
+    state.yearDetail[year] = fetch(`data/events-${year}.json`).then((r) => r.json());
+  return state.yearDetail[year];
+}
+
+// Full-text search is on by default, so quietly warm the transcript cache
+// (newest year first) shortly after load; searches reuse the same promises.
+function prefetchTranscripts() {
+  const years = [...state.meta.years].reverse();
+  let i = 0;
+  const next = () => {
+    if (i >= years.length) return;
+    loadYearDetail(years[i++]).catch(() => {}).finally(() => setTimeout(next, 250));
+  };
+  setTimeout(next, 1200);
+}
+
 /* ---------------- filters + events view ---------------- */
 function buildFilters() {
   const leaderSel = $("#f-leader");
@@ -121,7 +158,7 @@ function buildFilters() {
   for (const t of types) {
     const o = document.createElement("option");
     o.value = t;
-    o.textContent = `${state.typeLabels[t]} (${typeCounts[t].toLocaleString()})`;
+    o.textContent = `${(state.typeLabels[t] || t).toUpperCase()} (${typeCounts[t].toLocaleString()})`;
     typeSel.appendChild(o);
   }
   for (const [sel, def] of [["#f-date-from", state.meta.first_date],
@@ -133,28 +170,11 @@ function buildFilters() {
   }
   let deb;
   $("#f-search").addEventListener("input", () => { clearTimeout(deb); deb = setTimeout(applyFilters, 180); });
-  for (const id of ["#f-leader", "#f-type", "#f-date-from", "#f-date-to",
-                    "#f-activity", "#f-fulltext"])
+  for (const id of ["#f-leader", "#f-type", "#f-date-from", "#f-date-to"])
     $(id).addEventListener("change", applyFilters);
+  wireSwitch($("#f-activity"), applyFilters);
+  wireSwitch($("#f-fulltext"), applyFilters);
   $("#more-btn").addEventListener("click", () => renderList(true));
-}
-
-function loadYearDetail(year) {
-  if (!state.yearDetail[year])
-    state.yearDetail[year] = fetch(`data/events-${year}.json`).then((r) => r.json());
-  return state.yearDetail[year];
-}
-
-// Full-text search is on by default, so quietly warm the transcript cache
-// (newest year first) shortly after load; searches reuse the same promises.
-function prefetchTranscripts() {
-  const years = [...state.meta.years].reverse();
-  let i = 0;
-  const next = () => {
-    if (i >= years.length) return;
-    loadYearDetail(years[i++]).catch(() => {}).finally(() => setTimeout(next, 250));
-  };
-  setTimeout(next, 1200);
 }
 
 let filterToken = 0;
@@ -165,8 +185,8 @@ async function applyFilters() {
   const type = $("#f-type").value;
   const d0 = $("#f-date-from").value || state.meta.first_date;
   const d1 = $("#f-date-to").value || state.meta.last_date;
-  const activityOnly = $("#f-activity").checked;
-  const fullText = $("#f-fulltext").checked;
+  const activityOnly = switchOn($("#f-activity"));
+  const fullText = switchOn($("#f-fulltext"));
 
   // Full-text mode: make sure the transcript shards for the selected date
   // range are loaded before filtering (cached after first use).
@@ -174,7 +194,7 @@ async function applyFilters() {
   if (fullText && q) {
     const years = state.meta.years.filter(
       (y) => y >= d0.slice(0, 4) && y <= d1.slice(0, 4));
-    $("#result-count").textContent = "Loading full transcripts…";
+    $("#result-count").textContent = "LOADING FULL TRANSCRIPTS…";
     contentByYear = {};
     await Promise.all(years.map(async (y) => {
       contentByYear[y] = await loadYearDetail(y);
@@ -194,39 +214,68 @@ async function applyFilters() {
     }
     return true;
   });
+
+  state.monthCounts = new Map();
+  for (const e of state.filtered) {
+    const m = e.date.slice(0, 7);
+    state.monthCounts.set(m, (state.monthCounts.get(m) || 0) + 1);
+  }
+
   $("#result-count").textContent =
-    `${state.filtered.length.toLocaleString()} events` +
-    (q ? ` matching “${q}”${fullText ? " (incl. full text)" : ""}` : "");
-  drawChart(state.filtered, d0, d1);
+    `SHOWING ${state.filtered.length.toLocaleString()} MATCHING EVENTS` +
+    (q ? ` · “${q.toUpperCase()}”${fullText ? " · INCL. FULL TEXT" : ""}` : "");
+  drawChart(d0, d1);
   renderList(false);
 }
 
 function renderList(more) {
   const list = $("#event-list");
-  if (!more) { list.innerHTML = ""; state.shown = 0; }
+  if (!more) { list.innerHTML = ""; state.shown = 0; state.lastMonth = null; }
   const next = state.filtered.slice(state.shown, state.shown + state.pageSize);
   state.shown += next.length;
-  for (const e of next) list.appendChild(eventCard(e));
+  for (const e of next) {
+    const m = e.date.slice(0, 7);
+    if (m !== state.lastMonth) {
+      state.lastMonth = m;
+      const [y, mo] = m.split("-");
+      const hd = document.createElement("div");
+      hd.className = "group-hd";
+      hd.innerHTML =
+        `<b>${y} · ${MONTHS_FULL[+mo - 1]}</b><span class="rule"></span>` +
+        `<span>${(state.monthCounts.get(m) || 0).toLocaleString()} EVENTS</span>`;
+      list.appendChild(hd);
+    }
+    list.appendChild(eventCard(e));
+  }
+  $("#empty-note").hidden = state.filtered.length > 0;
   $("#more-btn").hidden = state.shown >= state.filtered.length;
 }
 
 function eventCard(e) {
   const div = document.createElement("div");
-  div.className = "event";
+  div.className = "ev";
   const title = e.titleEn || glossEn(e);
-  const badges = e.leaders.map((id) =>
-    `<span class="badge"><b>${esc(leaderName(id))}</b></span>`).join("") +
-    e.mentions.map((id) => `<span class="badge">${esc(leaderName(id))}</span>`).join("");
+  const mo = +e.date.slice(5, 7);
+  const chips = e.leaders.map((id) =>
+    `<span class="pill primary">${esc(leaderName(id))}</span>`).join("") +
+    e.mentions.map((id) => `<span class="pill">${esc(leaderName(id))}</span>`).join("");
   div.innerHTML = `
-    <div class="top">
-      <span class="date">${e.date}</span>
-      <span class="type">${esc(state.typeLabels[e.type] || e.type)}</span>
-      ${e.location ? `<span class="date">📍 ${esc(e.location)}</span>` : ""}
+    <div class="ev-day">
+      <div class="num">${e.date.slice(8)}</div>
+      <div class="mon">${MONTHS[mo - 1]}</div>
     </div>
-    <h4>${esc(title)}</h4>
-    <p class="zh-title">${esc(e.titleZh)}</p>
-    <div class="who">${badges}</div>
-    <div class="detail"></div>`;
+    <div>
+      <div class="ev-meta">
+        <span class="chip${e.activity ? " act" : ""}"><i></i>${esc((state.typeLabels[e.type] || e.type).toUpperCase())}</span>
+        <span class="code">${TYPE_CODES[e.type] || "OTH"}·${e.id}</span>
+        ${e.location ? `<span class="code">📍 ${esc(e.location)}</span>` : ""}
+      </div>
+      <h3>${esc(title)}</h3>
+      ${e.summaryEn ? `<p class="sum">${esc(e.summaryEn)}</p>` : ""}
+      <div class="zh-line"><span class="lab">原文</span><span class="txt">${esc(e.titleZh)}</span></div>
+      <div class="pills">${chips}</div>
+      <div class="detail"></div>
+    </div>`;
   div.addEventListener("click", (ev) => {
     if (ev.target.closest("a")) return;
     toggleDetail(div, e);
@@ -241,15 +290,11 @@ async function toggleDetail(card, e) {
   if (box.dataset.loaded) return;
   box.dataset.loaded = "1";
   let html = "";
-  if (e.summaryEn) html += `<p>${esc(e.summaryEn)}</p>`;
-  if (e.counterpart) html += `<p><span class="label">Counterpart</span><br>${esc(e.counterpart)}</p>`;
-  html += `<p><span class="label">Original transcript 原文</span><br><span class="zh-full" id="zh-${e.id}">Loading…</span></p>`;
+  if (e.counterpart) html += `<div class="lab">COUNTERPART</div><p>${esc(e.counterpart)}</p>`;
+  html += `<div class="lab">ORIGINAL TRANSCRIPT 原文</div><p class="zh-full" id="zh-${e.id}">Loading…</p>`;
   box.innerHTML = html;
-  const year = e.date.slice(0, 4);
   try {
-    if (!state.yearDetail[year])
-      state.yearDetail[year] = fetch(`data/events-${year}.json`).then((r) => r.json());
-    const detail = await state.yearDetail[year];
+    const detail = await loadYearDetail(e.date.slice(0, 4));
     const el = document.getElementById(`zh-${e.id}`);
     if (el) el.textContent = (detail[e.id] || {}).content_zh || "(unavailable)";
   } catch {
@@ -264,14 +309,10 @@ function esc(s) {
 }
 
 /* ---------------- monthly chart ---------------- */
-function drawChart(events, d0, d1) {
+function drawChart(d0, d1) {
   const svg = $("#chart-svg");
   svg.innerHTML = "";
-  const counts = new Map();
-  for (const e of events) {
-    const m = e.date.slice(0, 7);
-    counts.set(m, (counts.get(m) || 0) + 1);
-  }
+  const counts = state.monthCounts;
   const m0 = d0.slice(0, 7), m1 = d1.slice(0, 7);
   const months = [];
   for (let y = +d0.slice(0, 4); y <= +d1.slice(0, 4); y++)
@@ -282,18 +323,17 @@ function drawChart(events, d0, d1) {
       months.push(key);
     }
   if (!months.length) return;
-  const W = 1000, H = 120, pad = 2, bottom = 16;
+  const W = 1000, H = 110, pad = 2, bottom = 16;
   svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
   const max = Math.max(1, ...months.map((m) => counts.get(m) || 0));
-  const bw = Math.min(24, (W - pad * 2) / months.length - 1);
   const step = (W - pad * 2) / months.length;
+  const bw = Math.min(24, step - 1);
   const ns = "http://www.w3.org/2000/svg";
 
-  // baseline
   const base = document.createElementNS(ns, "line");
   base.setAttribute("x1", 0); base.setAttribute("x2", W);
   base.setAttribute("y1", H - bottom); base.setAttribute("y2", H - bottom);
-  base.setAttribute("stroke", "var(--baseline)");
+  base.setAttribute("stroke", "var(--line)");
   svg.appendChild(base);
 
   const tip = $("#tip");
@@ -302,25 +342,26 @@ function drawChart(events, d0, d1) {
     const h = Math.round((v / max) * (H - bottom - 8));
     const x = pad + i * step + (step - bw) / 2;
     const r = document.createElementNS(ns, "rect");
-    const y = H - bottom - h;
-    r.setAttribute("x", x); r.setAttribute("y", y);
-    r.setAttribute("width", Math.max(1, bw)); r.setAttribute("height", Math.max(h, v ? 1 : 0));
-    r.setAttribute("rx", Math.min(3, bw / 2));
+    r.setAttribute("x", x); r.setAttribute("y", H - bottom - h);
+    r.setAttribute("width", Math.max(1, bw));
+    r.setAttribute("height", Math.max(h, v ? 1 : 0));
+    r.setAttribute("rx", Math.min(2, bw / 2));
     r.setAttribute("fill", "var(--accent)");
     r.addEventListener("mousemove", (ev) => {
       tip.style.display = "block";
       tip.style.left = ev.clientX + 12 + "px";
       tip.style.top = ev.clientY + 12 + "px";
-      tip.textContent = `${m}: ${v.toLocaleString()} events`;
+      tip.textContent = `${m} · ${v.toLocaleString()} EVENTS`;
     });
     r.addEventListener("mouseleave", () => (tip.style.display = "none"));
     svg.appendChild(r);
-    // year tick each January
     if (m.endsWith("-01") || i === 0) {
       const t = document.createElementNS(ns, "text");
       t.setAttribute("x", x); t.setAttribute("y", H - 3);
-      t.setAttribute("fill", "var(--muted)");
-      t.setAttribute("font-size", "11");
+      t.setAttribute("fill", "var(--faint)");
+      t.setAttribute("font-size", "10");
+      t.setAttribute("font-family", "'IBM Plex Mono', monospace");
+      t.setAttribute("letter-spacing", "1");
       t.textContent = m.slice(0, 4);
       svg.appendChild(t);
     }
@@ -329,20 +370,32 @@ function drawChart(events, d0, d1) {
 
 /* ---------------- leaders view ---------------- */
 function buildLeadersView() {
-  const legend = $("#tier-legend");
-  legend.innerHTML = Object.entries(TIER_NAMES).map(([t, name]) =>
-    `<span><i class="tier-dot" style="background:${TIER_COLORS[t]}"></i>${name}</span>`).join("");
+  // Last-seen date per leader (as primary actor or mention).
+  const lastSeen = {};
+  for (const e of state.events) {
+    for (const id of e.leaders.concat(e.mentions))
+      if (!lastSeen[id]) lastSeen[id] = e.date; // events are newest-first
+  }
   const grid = $("#leader-grid");
-  for (const p of state.leaders) {
-    if (!p.count) continue;
+  const ranked = state.leaders.filter((p) => p.count)
+    .slice()
+    .sort((a, b) => b.count - a.count);
+  ranked.forEach((p, i) => {
     const card = document.createElement("div");
-    card.className = "leader-card";
+    card.className = "l-card";
+    const last = lastSeen[p.id]
+      ? `${MONTHS[+lastSeen[p.id].slice(5, 7) - 1]} ${lastSeen[p.id].slice(0, 4)}`
+      : "—";
     const top = Object.entries(p.by_type).sort((a, b) => b[1] - a[1]).slice(0, 3)
-      .map(([t, n]) => `${(state.typeLabels[t] || t).toLowerCase()} ${n.toLocaleString()}`).join(" · ");
+      .map(([t, n]) => `<span>${esc((state.typeLabels[t] || t))} ${n.toLocaleString()}</span>`).join("");
     card.innerHTML = `
-      <h4><i class="tier-dot" style="background:${TIER_COLORS[p.tier]}"></i>${esc(p.name_en)}<span class="zh">${esc(p.name_zh)}</span></h4>
-      <p class="roles">${esc(p.roles)}</p>
-      <p class="stats"><b>${p.count.toLocaleString()}</b> events · ${top}</p>`;
+      <div class="top"><span>№${String(i + 1).padStart(2, "0")}</span><span>LAST ${last}</span></div>
+      <div class="mid">
+        <div><h3>${esc(p.name_en)}</h3><div class="zh">${esc(p.name_zh)}</div></div>
+        <div class="n"><div class="v">${p.count.toLocaleString()}</div><div class="k">EVENTS</div></div>
+      </div>
+      <div class="role">${esc(p.roles)}</div>
+      <div class="types">${top}</div>`;
     card.addEventListener("click", () => {
       $("#f-leader").value = p.id;
       switchView("events");
@@ -350,7 +403,7 @@ function buildLeadersView() {
       location.hash = `leader=${p.id}`;
     });
     grid.appendChild(card);
-  }
+  });
 }
 
 /* ---------------- network view ---------------- */
@@ -366,16 +419,15 @@ function buildNetworkControls() {
     }
     el.value = def;
   }
-  $("#net-legend").innerHTML = Object.entries(TIER_NAMES).map(([t, name]) =>
-    `<span><i class="tier-dot" style="background:${TIER_COLORS[t]}"></i>${name}</span>`).join("");
-  for (const id of ["#n-year-from", "#n-year-to", "#n-min", "#n-mentions"])
+  for (const id of ["#n-year-from", "#n-year-to", "#n-min"])
     $(id).addEventListener("change", drawNetwork);
+  wireSwitch($("#n-mentions"), drawNetwork);
 }
 
 function computeGraph() {
   const y0 = $("#n-year-from").value, y1 = $("#n-year-to").value;
   const minW = Math.max(1, +$("#n-min").value || 1);
-  const useMentions = $("#n-mentions").checked;
+  const useMentions = switchOn($("#n-mentions"));
   const pair = new Map(), nodeCount = new Map();
   for (const e of state.events) {
     if (!e.activity) continue;
@@ -400,7 +452,6 @@ function computeGraph() {
   }
   const nodes = [...keep].map((id) => ({
     id, n: nodeCount.get(id) || 1,
-    tier: (state.leadersById[id] || {}).tier || 5,
     x: 0, y: 0, vx: 0, vy: 0,
   }));
   return { nodes, edges };
@@ -409,12 +460,13 @@ function computeGraph() {
 function drawNetwork() {
   const svg = $("#network-svg");
   svg.innerHTML = "";
+  $("#n-selected").textContent = "FULL NETWORK";
   const { nodes, edges } = computeGraph();
-  const W = svg.clientWidth || 1000, H = svg.clientHeight || 620;
+  const W = svg.clientWidth || 1120, H = svg.clientHeight || 620;
   svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
   if (!nodes.length) return;
+  $("#n-selected").textContent = `FULL NETWORK · ${nodes.length} NODES`;
 
-  // init positions on a circle
   nodes.forEach((n, i) => {
     const a = (i / nodes.length) * Math.PI * 2;
     n.x = W / 2 + Math.cos(a) * Math.min(W, H) * 0.33;
@@ -425,7 +477,6 @@ function drawNetwork() {
   const maxN = Math.max(...nodes.map((n) => n.n));
   const radius = (n) => 5 + 17 * Math.sqrt(n.n / maxN);
 
-  // simple force simulation
   for (let it = 0; it < 260; it++) {
     const k = 1 - it / 300;
     for (let i = 0; i < nodes.length; i++)
@@ -477,8 +528,9 @@ function drawNetwork() {
   const info = $("#net-info");
   const reset = () => {
     for (const el of edgeEls) el.classList.remove("dim", "hl");
-    nodeLayer.querySelectorAll(".node").forEach((g) => g.classList.remove("dim"));
-    info.innerHTML = "Click a node to inspect; click the background to reset.";
+    nodeLayer.querySelectorAll(".node").forEach((g) => g.classList.remove("dim", "sel"));
+    $("#n-selected").textContent = `FULL NETWORK · ${nodes.length} NODES`;
+    info.innerHTML = "Click a node to inspect its strongest co-appearance partners.";
   };
   svg.addEventListener("click", (ev) => { if (ev.target === svg) reset(); });
 
@@ -496,10 +548,9 @@ function drawNetwork() {
     const c = document.createElementNS(ns, "circle");
     c.setAttribute("cx", n.x); c.setAttribute("cy", n.y);
     c.setAttribute("r", radius(n));
-    c.setAttribute("fill", TIER_COLORS[n.tier]);
     g.appendChild(c);
     const t = document.createElementNS(ns, "text");
-    t.setAttribute("x", n.x + radius(n) + 3);
+    t.setAttribute("x", n.x + radius(n) + 4);
     t.setAttribute("y", n.y + 4);
     t.textContent = leaderName(n.id);
     g.appendChild(t);
@@ -517,7 +568,7 @@ function drawNetwork() {
         n.x = ox + p.x - start.x;
         n.y = oy + p.y - start.y;
         c.setAttribute("cx", n.x); c.setAttribute("cy", n.y);
-        t.setAttribute("x", n.x + radius(n) + 3);
+        t.setAttribute("x", n.x + radius(n) + 4);
         t.setAttribute("y", n.y + 4);
         edges.forEach((e, i) => {
           if (e.a === n.id) {
@@ -542,6 +593,7 @@ function drawNetwork() {
     g.addEventListener("click", () => {
       if (dragged) { dragged = false; return; }
       reset();
+      g.classList.add("sel");
       const neighbors = new Set([n.id]);
       const partners = [];
       edges.forEach((e, i) => {
@@ -559,6 +611,7 @@ function drawNetwork() {
       });
       partners.sort((a, b) => b[1] - a[1]);
       const p = state.leadersById[n.id] || {};
+      $("#n-selected").textContent = `ISOLATED: ${(p.name_en || n.id).toUpperCase()}`;
       info.innerHTML =
         `<b>${esc(p.name_en || n.id)}</b> ${esc(p.name_zh || "")} — ` +
         `${n.n.toLocaleString()} joint-appearance items in range. ` +
@@ -592,7 +645,7 @@ function switchView(name) {
 }
 
 boot().catch((err) => {
-  document.querySelector("main").innerHTML =
-    `<p style="color:#d03b3b">Failed to load data: ${esc(err.message)}</p>`;
+  document.body.insertAdjacentHTML("beforeend",
+    `<p style="color:#d9503f;padding:20px 28px;font-family:'IBM Plex Mono',monospace">FAILED TO LOAD DATA: ${esc(err.message)}</p>`);
   console.error(err);
 });

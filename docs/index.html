@@ -1,75 +1,135 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>China Leadership Tracker — Xinwen Lianbo Database</title>
 <meta name="description" content="A searchable English-language database of Chinese leaders' public activities, meetings, and policy events, built daily from CCTV's Xinwen Lianbo news broadcast.">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📺</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600;6..72,700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
+<script>
+  // Apply saved theme before first paint to avoid a flash.
+  (function () {
+    var t = null;
+    try { t = localStorage.getItem("clt-theme"); } catch (e) {}
+    if (!t) t = (window.matchMedia && matchMedia("(prefers-color-scheme: light)").matches) ? "light" : "dark";
+    document.documentElement.dataset.theme = t;
+  })();
+</script>
 </head>
 <body>
 
 <header class="site">
-  <div class="wrap">
-    <h1>China Leadership Tracker <span class="zh">新闻联播数据库</span></h1>
-    <p class="sub">Daily-updated database of Chinese leaders' public activities, meetings, and policy events, extracted from CCTV's <em>Xinwen Lianbo</em> evening news broadcast. <span id="meta-line"></span></p>
+  <div class="bar">
+    <div class="wordmark">
+      <b>CLT</b><span class="tag">_TRACKER</span><span class="zh">新闻联播数据库</span>
+    </div>
     <nav class="tabs">
-      <button data-view="events" class="active">Events</button>
-      <button data-view="leaders">Leaders</button>
-      <button data-view="network">Network</button>
-      <button data-view="about">About</button>
+      <button data-view="events" class="active">01·EVENTS</button>
+      <button data-view="leaders">02·LEADERS</button>
+      <button data-view="network">03·NETWORK</button>
+      <button data-view="about">04·ABOUT</button>
     </nav>
+    <div class="hdr-right">
+      <div class="upd"><i></i><span id="upd-label">UPD —</span></div>
+      <button class="theme-btn" id="theme-btn">◑ LIGHT</button>
+    </div>
   </div>
 </header>
 
-<main class="wrap">
-
-  <!-- ================= EVENTS ================= -->
-  <section id="view-events" class="view active">
-    <div class="filters">
-      <input type="search" id="f-search" placeholder="Search keywords, names, places (English or 中文)…">
-      <select id="f-leader"><option value="">All leaders</option></select>
-      <select id="f-type"><option value="">All event types</option></select>
-      <input type="date" id="f-date-from" title="From date">
-      <input type="date" id="f-date-to" title="To date">
-      <label class="chk"><input type="checkbox" id="f-activity"> leader activities only</label>
-      <label class="chk" title="Also match the original Chinese transcript text (downloads the transcripts for the selected date range on first use)"><input type="checkbox" id="f-fulltext" checked> search full text 原文</label>
+<!-- ================= EVENTS ================= -->
+<section id="view-events" class="view active">
+  <div class="wrap hero">
+    <div class="kicker">XINWEN LIANBO DATABASE&nbsp;&nbsp;/&nbsp;&nbsp;39.9042°N 116.4074°E&nbsp;&nbsp;/&nbsp;&nbsp;EST. 2016-02</div>
+    <h1 class="display">China Leadership Tracker</h1>
+    <p class="lede">A structured, English-accessible record of Chinese leaders' public activities — meetings, inspections, and policy events — extracted daily from CCTV's <em>Xinwen Lianbo</em> evening broadcast.</p>
+    <div class="stat-strip">
+      <div class="stat"><div class="v" id="stat-events">—</div><div class="k">TOTAL EVENTS</div></div>
+      <div class="stat"><div class="v" id="stat-leaders">—</div><div class="k">LEADERS TRACKED</div></div>
+      <div class="stat"><div class="v" id="stat-days">—</div><div class="k">BROADCAST DAYS</div></div>
+      <div class="stat"><div class="v accent">DAILY</div><div class="k">UPDATE CADENCE</div></div>
     </div>
+  </div>
 
-    <div class="chart-card">
-      <h3 id="chart-title">Matching events per month</h3>
+  <div class="filterbar">
+    <div class="row">
+      <div class="search-wrap">
+        <span class="glyph">⌕</span>
+        <input type="search" id="f-search" placeholder="SEARCH · ENGLISH OR 中文">
+      </div>
+      <select class="ctl" id="f-leader"><option value="">ALL LEADERS</option></select>
+      <select class="ctl" id="f-type"><option value="">ALL EVENT TYPES</option></select>
+      <input type="date" class="ctl" id="f-date-from" title="From date">
+      <input type="date" class="ctl" id="f-date-to" title="To date">
+      <button class="switch-btn" id="f-activity"><span class="sw"><i></i></span>ACTIVITIES ONLY</button>
+      <button class="switch-btn on" id="f-fulltext" title="Also match the original Chinese transcript text"><span class="sw"><i></i></span>FULL TEXT 原文</button>
+    </div>
+    <div class="count-line" id="result-count">LOADING…</div>
+  </div>
+
+  <div class="wrap">
+    <div class="chart-panel">
+      <h3>MATCHING EVENTS PER MONTH</h3>
       <svg id="chart-svg" preserveAspectRatio="none"></svg>
     </div>
+    <main class="list">
+      <div id="event-list"></div>
+      <div class="empty" id="empty-note" hidden>NO EVENTS MATCH THE CURRENT FILTERS</div>
+      <button class="more-btn" id="more-btn" hidden>SHOW MORE</button>
+    </main>
+  </div>
+</section>
 
-    <p class="count-note" id="result-count"></p>
-    <div id="event-list"></div>
-    <button class="more-btn" id="more-btn" hidden>Show more</button>
-  </section>
+<!-- ================= LEADERS ================= -->
+<section id="view-leaders" class="view">
+  <div class="wrap hero">
+    <div class="kicker">02 · ROSTER&nbsp;&nbsp;/&nbsp;&nbsp;POLITBURO 18TH–20TH CC + STATE LEADERS</div>
+    <h1 class="display sub">Leaders</h1>
+    <p class="lede">Senior figures tracked across the broadcast record, ranked by appearance count. Each card links to every event that mentions the leader by exact Chinese name.</p>
+  </div>
+  <div class="wrap">
+    <div class="l-grid" id="leader-grid"></div>
+  </div>
+</section>
 
-  <!-- ================= LEADERS ================= -->
-  <section id="view-leaders" class="view">
-    <div class="tier-legend" id="tier-legend"></div>
-    <div class="leader-grid" id="leader-grid"></div>
-  </section>
-
-  <!-- ================= NETWORK ================= -->
-  <section id="view-network" class="view">
-    <div class="filters">
-      <select id="n-year-from"></select>
-      <select id="n-year-to"></select>
-      <label class="chk">min co-appearances
-        <input type="number" id="n-min" value="5" min="1" max="200" style="width:70px">
-      </label>
-      <label class="chk"><input type="checkbox" id="n-mentions" checked> include mentions</label>
+<!-- ================= NETWORK ================= -->
+<section id="view-network" class="view">
+  <div class="wrap hero">
+    <div class="kicker">03 · CO-APPEARANCE GRAPH&nbsp;&nbsp;/&nbsp;&nbsp;ELITE PROXIMITY PROXY</div>
+    <h1 class="display sub">Network</h1>
+    <p class="lede">Nodes are leaders sized by joint public appearances; a link means two figures appeared in the same <em>Xinwen Lianbo</em> item. Drag nodes to rearrange; click a node to isolate its connections; click the background to reset.</p>
+    <div class="net-controls">
+      <span class="lab">RANGE</span>
+      <select class="ctl" id="n-year-from"></select>
+      <select class="ctl" id="n-year-to"></select>
+      <span class="lab">MIN CO-APPEARANCES</span>
+      <input type="number" class="ctl" id="n-min" value="5" min="1" max="200" style="width:76px">
+      <button class="switch-btn on" id="n-mentions"><span class="sw"><i></i></span>INCLUDE MENTIONS</button>
+      <span class="spacer"></span>
+      <span class="lab" id="n-selected">FULL NETWORK</span>
     </div>
-    <div class="tier-legend" id="net-legend"></div>
-    <svg id="network-svg"></svg>
-    <div class="net-info" id="net-info">Nodes are leaders sized by joint public appearances; a link means two figures appeared in the same <em>Xinwen Lianbo</em> item. Click a node to inspect; click the background to reset.</div>
-  </section>
+  </div>
+  <div class="wrap net-bottom">
+    <div class="net-panel"><svg id="network-svg"></svg></div>
+    <div class="net-legend">
+      <span><i class="dot"></i>NODE SIZE = TOTAL APPEARANCES</span>
+      <span><i class="ln"></i>LINK WIDTH = SHARED ITEMS</span>
+      <span>DRAG TO MOVE · CLICK NODE TO ISOLATE · CLICK BG TO RESET</span>
+    </div>
+    <div class="net-info" id="net-info">Click a node to inspect its strongest co-appearance partners.</div>
+  </div>
+</section>
 
-  <!-- ================= ABOUT ================= -->
-  <section id="view-about" class="view prose">
+<!-- ================= ABOUT ================= -->
+<section id="view-about" class="view">
+  <div class="wrap hero">
+    <div class="kicker">04 · ABOUT&nbsp;&nbsp;/&nbsp;&nbsp;METHOD, CAVEATS, DATA ACCESS</div>
+    <h1 class="display sub">About</h1>
+  </div>
+  <div class="wrap prose">
     <h3>What this is</h3>
     <p><em>Xinwen Lianbo</em> (新闻联播) is China's flagship 7 p.m. news program, simulcast nationally by CCTV. Its running order and wording are a curated official record of what the party-state wants known about its leaders: who met whom, who inspected what, which meetings were chaired, and which policy language was used. This site turns the full text of every broadcast since <b>February 2016</b> into a structured, searchable, English-accessible database, updated automatically every day.</p>
 
@@ -84,7 +144,7 @@
     <h3>Caveats for researchers</h3>
     <ul>
       <li>The source is state media: coverage reflects official signaling, not the full universe of leadership activity. Absence from <em>Xinwen Lianbo</em> is itself a signal, but interpret it carefully.</li>
-      <li>Event typing is rule-based on headline patterns; a small share of items are classified as <code>other</code> or <code>coverage</code> (thematic propaganda pieces that mention a leader without reporting an activity). The "leader activities only" filter excludes those.</li>
+      <li>Event typing is rule-based on headline patterns; a small share of items are classified as <code>other</code> or <code>coverage</code> (thematic propaganda pieces that mention a leader without reporting an activity). The "activities only" filter excludes those.</li>
       <li>Name matching is by exact Chinese name; a leader mentioned by title only (e.g. 总书记 without 习近平) is not captured in that item.</li>
       <li>English summaries are machine-generated and should be checked against the Chinese original before quotation.</li>
     </ul>
@@ -96,12 +156,18 @@
 
     <h3>Data access</h3>
     <p>The underlying data is plain JSON, republished on every update: <code>data/index.json</code> (all events), <code>data/leaders.json</code> (roster), and <code>data/events-YYYY.json</code> (full Chinese text by year). Cite as "China Leadership Tracker, based on CCTV Xinwen Lianbo transcripts."</p>
-  </section>
 
-  <footer class="site">
-    <span id="footer-meta"></span> · Source: CCTV <em>Xinwen Lianbo</em> · Not affiliated with CCTV. Built for research and educational use.
-  </footer>
-</main>
+    <h3>Credits</h3>
+    <p>Conceived, maintained by <a href="https://github.com/nelsonwang222" target="_blank" rel="noopener">Nelson Wang (@nelsonwang222)</a>, and co-worked with Claude's Fable 5.</p>
+  </div>
+</section>
+
+<footer class="site">
+  <div class="inner">
+    <span>SOURCE: CCTV XINWEN LIANBO · NOT AFFILIATED WITH CCTV · RESEARCH &amp; EDUCATIONAL USE</span>
+    <span id="footer-meta">DATA: data/index.json · leaders.json · events-YYYY.json</span>
+  </div>
+</footer>
 
 <div class="chart-tip" id="tip"></div>
 <script src="app.js"></script>
