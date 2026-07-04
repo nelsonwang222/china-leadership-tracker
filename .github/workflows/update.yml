@@ -52,4 +52,10 @@ jobs:
           git add -A
           git diff --cached --quiet && echo "No changes." && exit 0
           git commit -m "Daily update $(date -u +%F)"
+          # The remote may have moved while this run was translating;
+          # rebase (preferring this run's freshly built files) and retry.
+          for i in 1 2 3; do
+            git push && exit 0
+            git pull --rebase -X theirs origin main
+          done
           git push
