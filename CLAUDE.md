@@ -62,6 +62,8 @@ lazy-loaded/prefetched client-side.
 6. **Design handoff:** treat `.dc.html` mockups as visual spec only — their
    data/logic is placeholder. Keep real features the mockup omits (date
    pickers, chart, full-text toggle) and restyle them into the new language.
-7. **History caveat:** pipeline code and raw data from before the 2026-07-05
-   split remain in this repo's git history; going "private" for them would
-   require rewriting history, which was deliberately NOT done.
+7. **History was rewritten on 2026-07-05** (git filter-repo, force push) to
+   purge pre-split `pipeline/`, `data/`, and `requirements.txt` from all
+   commits. Any stale clone must `git fetch && git reset --hard origin/main`,
+   never merge/rebase old history back in. Old commits may stay reachable on
+   GitHub by direct SHA until GitHub garbage-collects them.
