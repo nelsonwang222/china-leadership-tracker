@@ -68,7 +68,8 @@ secret is set (this repo → Settings → Secrets and variables → Actions):
   Claude is used. Override the model with a repository variable
   `TRANSLATE_MODEL`.
 - Each run translates a batch of untranslated events, newest first, and caches
-  results — an event is only ever translated once.
+  results — an event is only ever translated once. The full 2016–present
+  archive is translated; daily runs only pick up new broadcasts.
 - Manual runs: Actions → "Daily update" → Run workflow, with a custom
   `translate_limit` (0 skips translation).
 

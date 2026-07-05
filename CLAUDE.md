@@ -25,7 +25,11 @@ private repos are metered) and checks out the pipeline repo with a write
 deploy key stored as secret `PIPELINE_DEPLOY_KEY`. Translation secrets
 (`GEMINI_API_KEY` / `ANTHROPIC_API_KEY`) and the `TRANSLATE_MODEL` var also
 live in THIS repo's settings. Data commits go back to the pipeline repo;
-`docs/data/*.json` commits land here.
+`docs/data/*.json` commits land here. Because the workflow is public, so are
+its run logs (event titles, counts, cadence) — keep pipeline stdout modest.
+
+The 2016–present archive is fully translated as of 2026-07-05 (19,760/19,760);
+routine runs only fetch/translate new broadcasts and take minutes, not hours.
 
 Local dev: `python -m http.server -d docs`. Frontend data contract:
 `index.json` holds compact array-of-arrays rows (see its `columns` field);
@@ -40,10 +44,11 @@ lazy-loaded/prefetched client-side.
 
 ## Lessons learned (change future behavior)
 
-1. **Never push to main while an Actions run is in flight** unless you must —
-   runs commit at the end. The commit step does `git pull --rebase -X theirs`
-   with retries, so a collision no longer loses a run's work, but it still
-   wastes a rebase. Check
+1. **Never push to main (either repo) while an Actions run is in flight**
+   unless you must — a run commits to BOTH repos at the end. The commit steps
+   do `git pull --rebase -X theirs` with retries, so a collision no longer
+   loses a run's work, but it still wastes a rebase. Routine runs take
+   minutes now (they took ~2h during the translation backfill). Check
    `gh run list --workflow "Daily update" --limit 1` first.
 2. **Pages deploys via Actions (`pages.yml`), not the legacy branch builder**
    — the legacy builder repeatedly wedged silently in `status: building`
@@ -71,4 +76,17 @@ lazy-loaded/prefetched client-side.
    purge pre-split `pipeline/`, `data/`, and `requirements.txt` from all
    commits. Any stale clone must `git fetch && git reset --hard origin/main`,
    never merge/rebase old history back in. Old commits may stay reachable on
-   GitHub by direct SHA until GitHub garbage-collects them.
+   GitHub by direct SHA until GitHub garbage-collects them (GitHub Support
+   can purge sooner on request). Before force-pushing, verify the rewrite two
+   ways: no stripped path anywhere in `git log --all --name-only`, and
+   `git ls-tree` hashes of the kept paths identical to the original HEAD.
+8. **The whole cross-repo wiring is scriptable with gh** — no web UI needed:
+   `gh repo deploy-key add key.pub --allow-write` (private repo),
+   `gh secret set PIPELINE_DEPLOY_KEY < key` (this repo), and
+   `gh api -X PUT repos/.../pages -F build_type=workflow` to flip the Pages
+   source to Actions. Deploy keys beat PATs here: repo-scoped, no expiry
+   surprises, and creatable headlessly.
+9. **Why this shape:** on a Free plan, making a repo private kills its Pages
+   site and meters its Actions minutes — and even paid private repos serve
+   Pages publicly. Hence: public site repo + private pipeline repo, workflow
+   in the public one. Going private on the single repo was never an option.
