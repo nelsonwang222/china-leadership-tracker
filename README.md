@@ -55,7 +55,8 @@ CCTV (tv.cctv.com/lm/xwlb) ── fetch ──▶ raw JSONL archive (private rep
 time): it checks out the private pipeline repo, fetches any missing broadcast
 days (self-healing — a failed run is caught by the next), translates new
 events, commits the data back to the pipeline repo, and publishes the rebuilt
-`docs/data/` here; GitHub Pages redeploys on push.
+`docs/data/` here; a chained deploy job (`pages.yml`) then publishes `docs/`
+to GitHub Pages.
 
 ## Translations
 

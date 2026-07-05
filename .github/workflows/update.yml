@@ -27,16 +27,16 @@ jobs:
   update:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Check out pipeline repo (private)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: nelsonwang222/china-leadership-tracker-pipeline
           ssh-key: ${{ secrets.PIPELINE_DEPLOY_KEY }}
           path: pipeline-repo
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           cache: pip
@@ -90,3 +90,14 @@ jobs:
             git pull --rebase -X theirs origin main
           done
           git push
+
+  # GITHUB_TOKEN pushes don't trigger pages.yml's push event, so deploy
+  # explicitly after publishing (also redeploys when there were no changes;
+  # that's a harmless no-op upload).
+  deploy:
+    needs: update
+    uses: ./.github/workflows/pages.yml
+    permissions:
+      contents: read
+      pages: write
+      id-token: write

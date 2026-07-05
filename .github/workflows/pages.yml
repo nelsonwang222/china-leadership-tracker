@@ -1,0 +1,39 @@
+name: Deploy Pages
+
+# Actions-based Pages deployment (replaces the legacy branch builder, which
+# wedged silently in "building"). Runs on direct pushes that touch docs/,
+# and is called by update.yml after it publishes fresh docs/data/ — that
+# call is required because pushes made with GITHUB_TOKEN don't trigger
+# push workflows.
+
+on:
+  push:
+    branches: [main]
+    paths: ["docs/**"]
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main   # when called from update.yml, github.sha predates the publish commit
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: docs
+      - id: deployment
+        uses: actions/deploy-pages@v5

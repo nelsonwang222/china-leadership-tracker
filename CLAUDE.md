@@ -16,6 +16,8 @@ docs/                 vanilla HTML/CSS/JS site — no build step, no framework
 docs/data/            built JSON published by the workflow (index, leaders,
                       per-year event shards, meta)
 .github/workflows/update.yml  runs the private pipeline, publishes docs/data/
+.github/workflows/pages.yml   deploys docs/ to Pages (push to docs/** or
+                              called from update.yml)
 ```
 
 The workflow runs HERE (public repos get free unlimited Actions minutes;
@@ -43,11 +45,14 @@ lazy-loaded/prefetched client-side.
    with retries, so a collision no longer loses a run's work, but it still
    wastes a rebase. Check
    `gh run list --workflow "Daily update" --limit 1` first.
-2. **GitHub Pages (legacy builds) wedges silently.** A build can sit in
-   `status: building` for 40+ minutes. Fix: `gh api -X POST
-   repos/.../pages/builds` to requeue (or push any commit). Verify deploys by
-   `curl`ing a changed file's content, not by build status. Served HTML is
-   cached ~10 min — always hard-refresh when eyeballing.
+2. **Pages deploys via Actions (`pages.yml`), not the legacy branch builder**
+   — the legacy builder repeatedly wedged silently in `status: building`
+   (fix was requeueing via `gh api -X POST repos/.../pages/builds`), so
+   Pages source was switched to "GitHub Actions" on 2026-07-05. pages.yml
+   runs on pushes touching `docs/**` AND as a job called from update.yml —
+   both are needed, because GITHUB_TOKEN pushes don't trigger push
+   workflows. Verify deploys by `curl`ing a changed file's content; served
+   files are CDN-cached ~10 min — always hard-refresh when eyeballing.
 3. **Workflow-file pushes need the `workflow` OAuth scope.** The gh token
    didn't have it; fix is `gh auth refresh -h github.com -s workflow`
    (device-code flow the user must complete in a browser).
