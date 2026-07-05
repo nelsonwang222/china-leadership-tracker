@@ -29,57 +29,56 @@ as a static site from `docs/` via GitHub Pages.
 
 ## How it works
 
-```
-CCTV (tv.cctv.com/lm/xwlb) ── pipeline/fetch.py ──▶ data/raw/YYYY.jsonl
-                                                        │
-                     pipeline/extract.py  (roster of ~58 elite figures,
-                     rule-based event typing: meeting / inspection / …)
-                                                        │
-                     pipeline/translate.py (Gemini or Claude API, cached
-                     in data/translations.json — each event translated once)
-                                                        │
-                     pipeline/build.py ──▶ docs/data/*.json ──▶ static site
-```
+This repo holds the website (`docs/` — vanilla HTML/CSS/JS, no build step, no
+framework) and the daily-update workflow. Search, filters, the chart, and the
+network graph are all computed client-side from `docs/data/index.json`; full
+transcripts load per-year on demand.
 
-- `pipeline/roster.py` — the tracked leaders with English names, roles, and
-  tenures.
-- `docs/` — the website: vanilla HTML/CSS/JS, no build step, no framework.
-  Search, filters, the chart, and the network graph are all computed
-  client-side from `docs/data/index.json`; full transcripts load per-year on
-  demand.
+The scraper/extraction/translation pipeline and the raw transcript archive
+live in a separate private repo (`china-leadership-tracker-pipeline`):
+
+```
+CCTV (tv.cctv.com/lm/xwlb) ── fetch ──▶ raw JSONL archive (private repo)
+                                            │
+                     extract  (roster of ~58 elite figures,
+                     rule-based event typing: meeting / inspection / …)
+                                            │
+                     translate  (Gemini or Claude API, cached —
+                     each event translated once)
+                                            │
+                     build ──▶ docs/data/*.json  (published to THIS repo)
+```
 
 ## Daily updates
 
-`.github/workflows/update.yml` runs on a cron: it fetches any missing
-broadcast days (self-healing — a failed run is caught by the next), translates
-new events, rebuilds `docs/data/`, and commits; GitHub Pages redeploys on
-push. The schedule currently includes extra temporary runs while the
-historical translation backlog clears, after which it returns to twice daily
-(22:30 and 07:30 Beijing time).
+`.github/workflows/update.yml` runs twice daily (22:30 and 07:30 Beijing
+time): it checks out the private pipeline repo, fetches any missing broadcast
+days (self-healing — a failed run is caught by the next), translates new
+events, commits the data back to the pipeline repo, and publishes the rebuilt
+`docs/data/` here; GitHub Pages redeploys on push.
 
 ## Translations
 
-Rule-based extraction and the English UI work with no configuration. Fluent
-English titles and summaries are produced by an LLM when an API-key secret is
-set (repo → Settings → Secrets and variables → Actions):
+Fluent English titles and summaries are produced by an LLM when an API-key
+secret is set (this repo → Settings → Secrets and variables → Actions):
 
 - `GEMINI_API_KEY` (currently active; default model `gemini-2.5-flash`) or
   `ANTHROPIC_API_KEY` (Claude, default `claude-opus-4-8`). If both are set,
   Claude is used. Override the model with a repository variable
   `TRANSLATE_MODEL`.
 - Each run translates a batch of untranslated events, newest first, and caches
-  results in `data/translations.json` — an event is only ever translated once.
+  results — an event is only ever translated once.
 - Manual runs: Actions → "Daily update" → Run workflow, with a custom
   `translate_limit` (0 skips translation).
 
 ## Local development
 
 ```sh
-python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
-.venv/bin/python -m pipeline.backfill   # fetch missing days
-.venv/bin/python -m pipeline.build      # rebuild docs/data/
-.venv/bin/python -m http.server -d docs 8000
+python -m http.server -d docs 8000
 ```
+
+The site is fully static; edit `docs/` and refresh. Regenerating the data in
+`docs/data/` requires the private pipeline repo.
 
 See `CLAUDE.md` for architecture notes, operational gotchas, and lessons
 learned while building this.

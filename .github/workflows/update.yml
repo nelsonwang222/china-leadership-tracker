@@ -1,16 +1,20 @@
 name: Daily update
 
+# The pipeline and raw data live in the private repo
+# china-leadership-tracker-pipeline; this workflow runs here because Actions
+# minutes are only free on public repos. It checks the private repo out with
+# a write deploy key (secret PIPELINE_DEPLOY_KEY), runs the pipeline there,
+# pushes data changes back to it, and publishes built docs/data/ here.
+
 on:
   schedule:
     - cron: "30 14 * * *"   # 22:30 Beijing — after the 19:00 broadcast transcript is posted
     - cron: "30 23 * * *"   # next-morning catch-up for late transcripts
-    # Temporary while the translation backlog clears (harmless no-ops after):
-    - cron: "15 2,5,8,11,17,20 * * *"
   workflow_dispatch:
     inputs:
       translate_limit:
         description: "Max events to translate this run (0 = skip)"
-        default: "2500"
+        default: "300"
 
 permissions:
   contents: write
@@ -25,35 +29,62 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Check out pipeline repo (private)
+        uses: actions/checkout@v4
+        with:
+          repository: nelsonwang222/china-leadership-tracker-pipeline
+          ssh-key: ${{ secrets.PIPELINE_DEPLOY_KEY }}
+          path: pipeline-repo
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: pip
+          cache-dependency-path: pipeline-repo/requirements.txt
 
-      - run: pip install -r requirements.txt
+      - run: pip install -r pipeline-repo/requirements.txt
 
       - name: Fetch new transcripts
+        working-directory: pipeline-repo
         run: python -m pipeline.backfill
 
       - name: Translate (skipped when no API key secret is set)
+        working-directory: pipeline-repo
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           TRANSLATE_MODEL: ${{ vars.TRANSLATE_MODEL }}
-        run: python -m pipeline.translate ${{ github.event.inputs.translate_limit || '2500' }}
+        run: python -m pipeline.translate ${{ github.event.inputs.translate_limit || '300' }}
 
       - name: Rebuild site data
+        working-directory: pipeline-repo
         run: python -m pipeline.build
 
-      - name: Commit and push
+      - name: Commit data to pipeline repo
+        working-directory: pipeline-repo
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git diff --cached --quiet && echo "No changes." && exit 0
-          git commit -m "Daily update $(date -u +%F)"
+          git add data
+          git diff --cached --quiet && echo "No data changes." && exit 0
+          git commit -m "Data update $(date -u +%F)"
           # The remote may have moved while this run was translating;
           # rebase (preferring this run's freshly built files) and retry.
+          for i in 1 2 3; do
+            git push && exit 0
+            git pull --rebase -X theirs origin main
+          done
+          git push
+
+      - name: Publish site data
+        run: |
+          mkdir -p docs/data
+          cp pipeline-repo/docs/data/*.json docs/data/
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/data
+          git diff --cached --quiet && echo "No site changes." && exit 0
+          git commit -m "Daily update $(date -u +%F)"
           for i in 1 2 3; do
             git push && exit 0
             git pull --rebase -X theirs origin main
