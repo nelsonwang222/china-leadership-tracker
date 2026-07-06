@@ -27,7 +27,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      url: ${{ steps.deployment.outputs.page_url || steps.deployment2.outputs.page_url }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -35,5 +35,15 @@ jobs:
       - uses: actions/upload-pages-artifact@v5
         with:
           path: docs
+      # Pages sometimes rejects deployments transiently ("Deployment failed,
+      # try again later") — retry once before going red. Longer outages
+      # self-heal: the next scheduled update redeploys everything anyway.
       - id: deployment
+        uses: actions/deploy-pages@v5
+        continue-on-error: true
+      - id: retry
+        if: steps.deployment.outcome == 'failure'
+        run: sleep 60
+      - id: deployment2
+        if: steps.deployment.outcome == 'failure'
         uses: actions/deploy-pages@v5

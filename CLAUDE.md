@@ -58,6 +58,10 @@ lazy-loaded/prefetched client-side.
    both are needed, because GITHUB_TOKEN pushes don't trigger push
    workflows. Verify deploys by `curl`ing a changed file's content; served
    files are CDN-cached ~10 min — always hard-refresh when eyeballing.
+   deploy-pages can fail transiently with "Deployment failed, try again
+   later" (seen lasting ~1h on 2026-07-06, GitHub status page green the
+   whole time); pages.yml retries once, and a red deploy job self-heals at
+   the next scheduled run — or `gh workflow run "Deploy Pages"` manually.
 3. **Workflow-file pushes need the `workflow` OAuth scope.** The gh token
    didn't have it; fix is `gh auth refresh -h github.com -s workflow`
    (device-code flow the user must complete in a browser).
