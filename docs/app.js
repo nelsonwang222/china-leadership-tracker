@@ -637,7 +637,7 @@ function drawNetwork() {
 // SHA-256 of the export password; a client-side gate on a public static
 // site is a deterrent only — the underlying JSON in data/ is public.
 const EXPORT_PASS_SHA256 =
-  "730ccfff385847fe3a157af9a341e6e7b95fe8c401f48ab43a45fb1e432fd47c";
+  "c809c86f60f6eb45228c990fd24ccde2650440c7c95ea92b32754906210a36d3";
 
 async function sha256Hex(text) {
   const buf = await crypto.subtle.digest(
