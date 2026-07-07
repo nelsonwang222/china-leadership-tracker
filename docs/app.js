@@ -8,6 +8,7 @@ const $ = (sel) => document.querySelector(sel);
 const TYPE_CODES = {
   meeting: "MTG", talks: "BIL", phone_call: "TEL", message: "MSG",
   chaired_meeting: "CHR", inspection: "INS", foreign_trip: "TRIP",
+  visit_to_china: "VIS",
   ceremony: "CER", symposium: "SYM", deliberation: "NPC", funeral: "FNR",
   speech: "SPCH", decree: "DEC", article: "ART", brief: "BRF",
   coverage: "COV", other: "OTH",
