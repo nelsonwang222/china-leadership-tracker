@@ -92,7 +92,7 @@ async function boot() {
 
   $("#upd-label").textContent = `UPD ${meta.built_at.slice(0, 10)}`;
   $("#stat-events").textContent = meta.n_events.toLocaleString();
-  $("#stat-leaders").textContent = state.leaders.filter((p) => p.count).length;
+  $("#stat-leaders").textContent = state.leaders.length;
   $("#stat-days").textContent = meta.n_days.toLocaleString();
 
   buildFilters();
