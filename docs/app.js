@@ -10,7 +10,7 @@ const TYPE_CODES = {
   chaired_meeting: "CHR", inspection: "INS", foreign_trip: "TRIP",
   visit_to_china: "VIS",
   ceremony: "CER", symposium: "SYM", deliberation: "NPC", funeral: "FNR",
-  speech: "SPCH", decree: "DEC", article: "ART", brief: "BRF",
+  speech: "SPCH", decree: "APPT", document: "DOC", article: "ART", brief: "BRF",
   coverage: "COV", other: "OTH",
 };
 const MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN",
