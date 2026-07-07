@@ -74,6 +74,18 @@
     <div class="chart-panel">
       <h3>MATCHING EVENTS PER MONTH</h3>
       <svg id="chart-svg" preserveAspectRatio="none"></svg>
+      <div class="chart-foot">
+        <div class="chart-count" id="chart-count">COUNT: —</div>
+        <div class="dl-wrap">
+          <button class="dl-btn" id="dl-btn" type="button">&#8681; DOWNLOAD .XLSX</button>
+          <div class="dl-pop" id="dl-pop" hidden>
+            <label for="dl-pass">PASSWORD REQUIRED</label>
+            <input type="password" id="dl-pass" autocomplete="off" spellcheck="false">
+            <button class="dl-btn dl-go" id="dl-go" type="button">EXPORT</button>
+            <div class="dl-err" id="dl-err" hidden>WRONG PASSWORD</div>
+          </div>
+        </div>
+      </div>
     </div>
     <main class="list">
       <div id="event-list"></div>

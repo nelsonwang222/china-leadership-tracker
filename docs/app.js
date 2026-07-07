@@ -176,6 +176,7 @@ function buildFilters() {
   wireSwitch($("#f-activity"), applyFilters);
   wireSwitch($("#f-fulltext"), applyFilters);
   $("#more-btn").addEventListener("click", () => renderList(true));
+  wireExport();
 }
 
 let filterToken = 0;
@@ -225,6 +226,8 @@ async function applyFilters() {
   $("#result-count").textContent =
     `SHOWING ${state.filtered.length.toLocaleString()} MATCHING EVENTS` +
     (q ? ` · “${q.toUpperCase()}”${fullText ? " · INCL. FULL TEXT" : ""}` : "");
+  $("#chart-count").innerHTML =
+    `COUNT: <b>${state.filtered.length.toLocaleString()}</b> MATCHING EVENTS`;
   drawChart(d0, d1);
   renderList(false);
 }
@@ -628,6 +631,197 @@ function drawNetwork() {
     });
     nodeLayer.appendChild(g);
   }
+}
+
+/* ---------------- export (password-gated XLSX) ---------------- */
+// SHA-256 of the export password; a client-side gate on a public static
+// site is a deterrent only — the underlying JSON in data/ is public.
+const EXPORT_PASS_SHA256 =
+  "730ccfff385847fe3a157af9a341e6e7b95fe8c401f48ab43a45fb1e432fd47c";
+
+async function sha256Hex(text) {
+  const buf = await crypto.subtle.digest(
+    "SHA-256", new TextEncoder().encode(text));
+  return [...new Uint8Array(buf)]
+    .map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+function wireExport() {
+  const pop = $("#dl-pop"), pass = $("#dl-pass"), err = $("#dl-err");
+  $("#dl-btn").addEventListener("click", () => {
+    if (sessionStorage.getItem("dlAuth") === "1") { exportXlsx(); return; }
+    pop.hidden = !pop.hidden;
+    if (!pop.hidden) { err.hidden = true; pass.value = ""; pass.focus(); }
+  });
+  const submit = async () => {
+    if ((await sha256Hex(pass.value)) === EXPORT_PASS_SHA256) {
+      sessionStorage.setItem("dlAuth", "1");
+      pop.hidden = true;
+      exportXlsx();
+    } else {
+      err.hidden = false;
+      pass.select();
+    }
+  };
+  $("#dl-go").addEventListener("click", submit);
+  pass.addEventListener("keydown", (e) => { if (e.key === "Enter") submit(); });
+  document.addEventListener("click", (e) => {
+    if (!pop.hidden && !e.target.closest(".dl-wrap")) pop.hidden = true;
+  });
+}
+
+function xmlEsc(s) {
+  return String(s ?? "")
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, "");
+}
+
+function colRef(n) {
+  let s = "";
+  for (n++; n; n = Math.floor((n - 1) / 26))
+    s = String.fromCharCode(64 + ((n - 1) % 26) + 1) + s;
+  return s;
+}
+
+function sheetXml(rows) {
+  const body = rows.map((row, ri) =>
+    `<row r="${ri + 1}">` + row.map((v, ci) =>
+      `<c r="${colRef(ci)}${ri + 1}" t="inlineStr">` +
+      `<is><t xml:space="preserve">${xmlEsc(v)}</t></is></c>`
+    ).join("") + "</row>").join("");
+  return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<worksheet xmlns="http://schemas.openxmlformats.org/' +
+    'spreadsheetml/2006/main"><sheetData>' + body +
+    "</sheetData></worksheet>";
+}
+
+const CRC_TABLE = (() => {
+  const t = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    t[n] = c >>> 0;
+  }
+  return t;
+})();
+
+function crc32(bytes) {
+  let c = 0xffffffff;
+  for (let i = 0; i < bytes.length; i++)
+    c = CRC_TABLE[(c ^ bytes[i]) & 0xff] ^ (c >>> 8);
+  return (c ^ 0xffffffff) >>> 0;
+}
+
+// Minimal ZIP writer, entries stored uncompressed — enough for an .xlsx.
+function zipStore(files) {
+  const enc = new TextEncoder();
+  const now = new Date();
+  const dosTime = (now.getHours() << 11) | (now.getMinutes() << 5) |
+                  (now.getSeconds() >> 1);
+  const dosDate = ((now.getFullYear() - 1980) << 9) |
+                  ((now.getMonth() + 1) << 5) | now.getDate();
+  const parts = [], central = [];
+  let offset = 0;
+  for (const f of files) {
+    const name = enc.encode(f.name), data = enc.encode(f.text);
+    const crc = crc32(data);
+    const lh = new DataView(new ArrayBuffer(30));
+    lh.setUint32(0, 0x04034b50, true);
+    lh.setUint16(4, 20, true);       // version needed to extract
+    lh.setUint16(6, 0x0800, true);   // UTF-8 filenames
+    lh.setUint16(8, 0, true);        // stored (no compression)
+    lh.setUint16(10, dosTime, true);
+    lh.setUint16(12, dosDate, true);
+    lh.setUint32(14, crc, true);
+    lh.setUint32(18, data.length, true);
+    lh.setUint32(22, data.length, true);
+    lh.setUint16(26, name.length, true);
+    parts.push(new Uint8Array(lh.buffer), name, data);
+    const cd = new DataView(new ArrayBuffer(46));
+    cd.setUint32(0, 0x02014b50, true);
+    cd.setUint16(4, 20, true);
+    cd.setUint16(6, 20, true);
+    cd.setUint16(8, 0x0800, true);
+    cd.setUint16(10, 0, true);
+    cd.setUint16(12, dosTime, true);
+    cd.setUint16(14, dosDate, true);
+    cd.setUint32(16, crc, true);
+    cd.setUint32(20, data.length, true);
+    cd.setUint32(24, data.length, true);
+    cd.setUint16(28, name.length, true);
+    cd.setUint32(42, offset, true);
+    central.push(new Uint8Array(cd.buffer), name);
+    offset += 30 + name.length + data.length;
+  }
+  const cdSize = central.reduce((s, a) => s + a.length, 0);
+  const eocd = new DataView(new ArrayBuffer(22));
+  eocd.setUint32(0, 0x06054b50, true);
+  eocd.setUint16(8, files.length, true);
+  eocd.setUint16(10, files.length, true);
+  eocd.setUint32(12, cdSize, true);
+  eocd.setUint32(16, offset, true);
+  return new Blob([...parts, ...central, new Uint8Array(eocd.buffer)], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+}
+
+function exportXlsx() {
+  const rows = [["Date", "Type", "Title (ZH)", "Title (EN)", "Summary (EN)",
+                 "Leaders", "Mentions", "Counterpart", "Location",
+                 "Event ID"]];
+  for (const e of state.filtered) {
+    rows.push([
+      e.date,
+      state.typeLabels[e.type] || e.type,
+      e.titleZh,
+      e.titleEn || "",
+      e.summaryEn || "",
+      e.leaders.map(leaderName).join("; "),
+      e.mentions.map(leaderName).join("; "),
+      e.counterpart || "",
+      e.location || "",
+      e.id,
+    ]);
+  }
+  const XMLNS_PKG = "http://schemas.openxmlformats.org/package/2006";
+  const XMLNS_DOC = "http://schemas.openxmlformats.org/officeDocument/2006";
+  const files = [
+    { name: "[Content_Types].xml", text:
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      `<Types xmlns="${XMLNS_PKG}/content-types">` +
+      '<Default Extension="rels" ContentType="application/vnd.' +
+      'openxmlformats-package.relationships+xml"/>' +
+      '<Default Extension="xml" ContentType="application/xml"/>' +
+      '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.' +
+      'openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>' +
+      '<Override PartName="/xl/worksheets/sheet1.xml" ContentType=' +
+      '"application/vnd.openxmlformats-officedocument.spreadsheetml.' +
+      'worksheet+xml"/></Types>' },
+    { name: "_rels/.rels", text:
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      `<Relationships xmlns="${XMLNS_PKG}/relationships">` +
+      `<Relationship Id="rId1" Type="${XMLNS_DOC}/relationships/` +
+      'officeDocument" Target="xl/workbook.xml"/></Relationships>' },
+    { name: "xl/workbook.xml", text:
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/' +
+      `2006/main" xmlns:r="${XMLNS_DOC}/relationships"><sheets>` +
+      '<sheet name="Events" sheetId="1" r:id="rId1"/></sheets></workbook>' },
+    { name: "xl/_rels/workbook.xml.rels", text:
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      `<Relationships xmlns="${XMLNS_PKG}/relationships">` +
+      `<Relationship Id="rId1" Type="${XMLNS_DOC}/relationships/worksheet" ` +
+      'Target="worksheets/sheet1.xml"/></Relationships>' },
+    { name: "xl/worksheets/sheet1.xml", text: sheetXml(rows) },
+  ];
+  const d0 = $("#f-date-from").value || state.meta.first_date;
+  const d1 = $("#f-date-to").value || state.meta.last_date;
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(zipStore(files));
+  a.download = `china-leadership-tracker_${d0}_${d1}.xlsx`;
+  a.click();
+  URL.revokeObjectURL(a.href);
 }
 
 /* ---------------- tabs ---------------- */
