@@ -47,6 +47,16 @@ function initTheme() {
 }
 
 function switchOn(el) { return el.classList.contains("on"); }
+// Mutually exclusive switch group: exactly one stays on at all times.
+function wireRadio(ids, onChange) {
+  const els = ids.map((id) => $(id));
+  for (const el of els)
+    el.addEventListener("click", () => {
+      if (switchOn(el)) return;
+      for (const o of els) o.classList.toggle("on", o === el);
+      onChange();
+    });
+}
 function wireSwitch(el, onChange) {
   el.addEventListener("click", () => {
     el.classList.toggle("on");
@@ -144,10 +154,9 @@ function prefetchTranscripts() {
 function buildFilters() {
   const leaderSel = $("#f-leader");
   for (const p of state.leaders) {
-    if (!p.count) continue;
     const o = document.createElement("option");
     o.value = p.id;
-    o.textContent = `${p.name_en} ${p.name_zh} (${p.count.toLocaleString()})`;
+    o.textContent = `${p.name_en} ${p.name_zh}`;
     leaderSel.appendChild(o);
   }
   const typeSel = $("#f-type");
@@ -173,8 +182,7 @@ function buildFilters() {
   $("#f-search").addEventListener("input", () => { clearTimeout(deb); deb = setTimeout(applyFilters, 180); });
   for (const id of ["#f-leader", "#f-type", "#f-date-from", "#f-date-to"])
     $(id).addEventListener("change", applyFilters);
-  wireSwitch($("#f-activity"), applyFilters);
-  wireSwitch($("#f-fulltext"), applyFilters);
+  wireRadio(["#f-actor", "#f-mention", "#f-fulltext"], applyFilters);
   $("#more-btn").addEventListener("click", () => renderList(true));
   wireExport();
 }
@@ -187,8 +195,9 @@ async function applyFilters() {
   const type = $("#f-type").value;
   const d0 = $("#f-date-from").value || state.meta.first_date;
   const d1 = $("#f-date-to").value || state.meta.last_date;
-  const activityOnly = switchOn($("#f-activity"));
-  const fullText = switchOn($("#f-fulltext"));
+  const mode = switchOn($("#f-mention")) ? "mention"
+             : switchOn($("#f-fulltext")) ? "fulltext" : "actor";
+  const fullText = mode === "fulltext";
 
   // Full-text mode: make sure the transcript shards for the selected date
   // range are loaded before filtering (cached after first use).
@@ -207,8 +216,13 @@ async function applyFilters() {
   state.filtered = state.events.filter((e) => {
     if (e.date < d0 || e.date > d1) return false;
     if (type && e.type !== type) return false;
-    if (activityOnly && !e.activity) return false;
-    if (leader && !e.leaders.includes(leader)) return false;
+    if (leader) {
+      const asActor = e.leaders.includes(leader);
+      const asMention = e.mentions.includes(leader);
+      if (mode === "actor" && !asActor) return false;
+      if (mode === "mention" && !asMention) return false;
+      if (mode === "fulltext" && !asActor && !asMention) return false;
+    }
     if (q && !haystack(e).includes(q)) {
       if (!contentByYear) return false;
       const det = (contentByYear[e.date.slice(0, 4)] || {})[e.id];
@@ -381,25 +395,19 @@ function buildLeadersView() {
       if (!lastSeen[id]) lastSeen[id] = e.date; // events are newest-first
   }
   const grid = $("#leader-grid");
-  const ranked = state.leaders.filter((p) => p.count)
-    .slice()
-    .sort((a, b) => b.count - a.count);
-  ranked.forEach((p, i) => {
+  // leaders.json arrives in official ranking order (tier, then roster order)
+  state.leaders.forEach((p, i) => {
     const card = document.createElement("div");
     card.className = "l-card";
     const last = lastSeen[p.id]
       ? `${MONTHS[+lastSeen[p.id].slice(5, 7) - 1]} ${lastSeen[p.id].slice(0, 4)}`
       : "—";
-    const top = Object.entries(p.by_type).sort((a, b) => b[1] - a[1]).slice(0, 3)
-      .map(([t, n]) => `<span>${esc((state.typeLabels[t] || t))} ${n.toLocaleString()}</span>`).join("");
     card.innerHTML = `
       <div class="top"><span>№${String(i + 1).padStart(2, "0")}</span><span>LAST ${last}</span></div>
       <div class="mid">
         <div><h3>${esc(p.name_en)}</h3><div class="zh">${esc(p.name_zh)}</div></div>
-        <div class="n"><div class="v">${p.count.toLocaleString()}</div><div class="k">EVENTS</div></div>
       </div>
-      <div class="role">${esc(p.roles)}</div>
-      <div class="types">${top}</div>`;
+      <div class="role">${esc(p.roles)}</div>`;
     card.addEventListener("click", () => {
       $("#f-leader").value = p.id;
       switchView("events");

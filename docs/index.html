@@ -64,8 +64,9 @@
       <select class="ctl" id="f-type"><option value="">ALL EVENT TYPES</option></select>
       <input type="date" class="ctl" id="f-date-from" title="From date">
       <input type="date" class="ctl" id="f-date-to" title="To date">
-      <button class="switch-btn" id="f-activity"><span class="sw"><i></i></span>ACTIVITIES ONLY</button>
-      <button class="switch-btn on" id="f-fulltext" title="Also match the original Chinese transcript text"><span class="sw"><i></i></span>FULL TEXT 原文</button>
+      <button class="switch-btn on" id="f-actor" title="Match events where the selected leader is a primary actor"><span class="sw"><i></i></span>AS PRIMARY ACTOR</button>
+      <button class="switch-btn" id="f-mention" title="Match events where the selected leader is only mentioned in the body text"><span class="sw"><i></i></span>AS MENTIONED</button>
+      <button class="switch-btn" id="f-fulltext" title="Search inside the original Chinese transcript text"><span class="sw"><i></i></span>FULL TEXT 原文</button>
     </div>
     <div class="count-line" id="result-count">LOADING…</div>
   </div>
