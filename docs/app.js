@@ -775,13 +775,24 @@ function zipStore(files) {
 }
 
 function exportXlsx() {
-  const rows = [["Date", "Type", "Title (ZH)", "Title (EN)", "Summary (EN)",
-                 "Leaders", "Mentions", "Counterpart", "Location",
-                 "Event ID"]];
+  const leader = $("#f-leader").value;
+  const modeLabel = switchOn($("#f-mention")) ? "Mentioned"
+                  : switchOn($("#f-fulltext")) ? "Full text" : "Primary actor";
+  const rows = [["Date", "Type", "Mode", "Title (ZH)", "Title (EN)",
+                 "Summary (EN)", "Leaders", "Mentions", "Counterpart",
+                 "Location", "Event ID"]];
   for (const e of state.filtered) {
+    // With a leader selected, Mode says how THAT leader relates to the row
+    // (matters in Full text mode, where either relation matches); without
+    // one it records the mode the export was made in.
+    const mode = leader
+      ? (e.leaders.includes(leader) ? "Primary actor"
+         : e.mentions.includes(leader) ? "Mentioned" : "")
+      : modeLabel;
     rows.push([
       e.date,
       state.typeLabels[e.type] || e.type,
+      mode,
       e.titleZh,
       e.titleEn || "",
       e.summaryEn || "",
