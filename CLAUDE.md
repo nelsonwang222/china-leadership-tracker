@@ -36,6 +36,26 @@ Local dev: `python -m http.server -d docs`. Frontend data contract:
 full Chinese text lives only in per-year `events-YYYY.json` shards,
 lazy-loaded/prefetched client-side.
 
+Key frontend facts (state as of 2026-07-08):
+
+- **Match modes**: the filter bar has three mutually exclusive switches
+  (`wireRadio`, exactly one always on): AS PRIMARY ACTOR (default; leader
+  filter matches `e.leaders`) / AS MENTIONED (`e.mentions`) / FULL TEXT 原文
+  (search loads transcript shards; leader matches either list). Per-leader
+  actor/mention counts are read off the chart's COUNT line by switching
+  modes — leader cards deliberately show no counts (dropped as confusing).
+- **Roster page** shows all 58 in official ranking — `leaders.json` arrives
+  pre-sorted (tier, then roster order); "LEADERS TRACKED" is roster size,
+  NOT leaders-with-events (title-based primaries leave ~14 at zero).
+- **XLSX export** under the chart: password-gated (SHA-256 hash constant in
+  app.js — a deterrent only, the JSON is public; plaintext password is
+  recorded only in the workspace-root PROJECT_OVERVIEW.md, outside git),
+  session-cached via sessionStorage, generates a real .xlsx from a
+  dependency-free stored-entry zip writer + inline-string sheet XML. Columns
+  include Mode (how the selected leader relates to each row).
+- **Type labels** flow from the pipeline via `index.json`'s `types` map; a
+  new event type needs only a cosmetic `TYPE_CODES` entry here.
+
 - **Design**: implemented from Claude Design project
   992c228a-c88e-4e22-8073-51d1654f2795 ("Modernizing China leadership
   tracker"). Tokens live in `docs/style.css` (`--bg/--panel/--line/--ink/
@@ -94,3 +114,19 @@ lazy-loaded/prefetched client-side.
    site and meters its Actions minutes — and even paid private repos serve
    Pages publicly. Hence: public site repo + private pipeline repo, workflow
    in the public one. Going private on the single repo was never an option.
+10. **Keep every stat consistent with what clicking shows.** A leader card
+    count that differs from the filter's result count reads as a bug; when
+    the leader filter became primary-actor-only, card counts had to go and
+    "LEADERS TRACKED" had to become roster size (it silently fell 58→44 by
+    still counting leaders-with-primary-events).
+11. **A pipeline semantics change is a two-repo change.** Reclassifications
+    ship as pipeline commits, but anything the UI states about the data
+    (toggle labels, stats, export columns) usually needs a matching docs/
+    commit — grep app.js for the affected field before pushing the pipeline
+    side. Data goes live only at the next Daily update run (trigger one
+    manually with `gh workflow run "Daily update"`); docs/ changes deploy on
+    push via pages.yml.
+12. **In-browser .xlsx needs no library**: an xlsx is a zip of XML; stored
+    (uncompressed) zip entries + a CRC32 table + inline-string sheet XML is
+    ~130 lines and opens fine in Excel with CJK intact. Validate with
+    Python zipfile + ElementTree, not by eyeballing.

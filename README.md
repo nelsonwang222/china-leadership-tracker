@@ -12,13 +12,21 @@ as a static site from `docs/` via GitHub Pages.
 
 - **Events** — every leader-related news item since 2016, with English titles
   and analytic summaries (LLM-translated, cached), the original Chinese
-  headline and full transcript, event-type classification, counterparts, and
-  locations. Keyword search (English or 中文) covers titles, summaries, names —
-  and, by default, the full transcript text. Filter by leader, event type, and
-  exact date range; a monthly chart tracks whatever is currently matched.
+  headline and full transcript, event-type classification (17 types, from
+  bilateral talks to inbound state visits to policy-document releases),
+  counterparts, and locations. Keyword search (English or 中文), filters by
+  leader, event type, and exact date range. Three mutually exclusive match
+  modes: **AS PRIMARY ACTOR** (events the selected leader actually did —
+  named as actor in the headline, not merely invoked in 学习贯彻…精神
+  boilerplate), **AS MENTIONED** (named only in the body text), and
+  **FULL TEXT 原文** (search inside the transcripts). A monthly chart and a
+  live COUNT line track whatever is matched, and a password-gated button
+  exports the matching events as a real `.xlsx`, generated in-browser with
+  zero dependencies.
 - **Leaders** — ~58 senior figures (Politburo members of the 18th–20th Central
-  Committees, state leaders, key ministers), ranked by appearance count with
-  roles, last-seen dates, and per-type breakdowns.
+  Committees, state leaders, key ministers) in official ranking order, with
+  roles and last-seen dates. Per-leader activity and mention counts are read
+  off the COUNT line by switching match modes.
 - **Network** — an interactive co-appearance graph (two figures linked when
   they appear in the same news item, a standard elite-proximity proxy).
   Adjustable year range and edge threshold; drag nodes, click to isolate a
@@ -40,8 +48,8 @@ live in a separate private repo (`china-leadership-tracker-pipeline`):
 ```
 CCTV (tv.cctv.com/lm/xwlb) ── fetch ──▶ raw JSONL archive (private repo)
                                             │
-                     extract  (roster of ~58 elite figures,
-                     rule-based event typing: meeting / inspection / …)
+                     extract  (roster of ~58 elite figures; 17 event types
+                     via ordered keyword rules; actor-vs-mention semantics)
                                             │
                      translate  (Gemini or Claude API, cached —
                      each event translated once)
