@@ -208,7 +208,7 @@ async function applyFilters() {
     if (e.date < d0 || e.date > d1) return false;
     if (type && e.type !== type) return false;
     if (activityOnly && !e.activity) return false;
-    if (leader && !e.leaders.includes(leader) && !e.mentions.includes(leader)) return false;
+    if (leader && !e.leaders.includes(leader)) return false;
     if (q && !haystack(e).includes(q)) {
       if (!contentByYear) return false;
       const det = (contentByYear[e.date.slice(0, 4)] || {})[e.id];
