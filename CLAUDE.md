@@ -55,6 +55,14 @@ Key frontend facts (state as of 2026-07-08):
   include Mode (how the selected leader relates to each row).
 - **Type labels** flow from the pipeline via `index.json`'s `types` map; a
   new event type needs only a cosmetic `TYPE_CODES` entry here.
+- **Deliberately noindexed** (2026-07-08, user request): index.html has
+  `<meta name="robots" content="noindex, nofollow">` — don't remove it
+  without asking. robots.txt is NOT an option for a project Pages site:
+  crawlers read it only at the origin root (nelsonwang222.github.io/),
+  which this repo doesn't control; that would need a user-site repo and
+  would affect every project under the domain. The meta tag can't cover
+  the raw JSON under docs/data/ (Pages sets no custom headers), and none
+  of this is access control — the site stays publicly reachable.
 
 - **Design**: implemented from Claude Design project
   992c228a-c88e-4e22-8073-51d1654f2795 ("Modernizing China leadership
