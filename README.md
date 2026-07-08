@@ -103,3 +103,9 @@ All processed data is plain JSON under `docs/data/` and republished daily.
 Please cite as "China Leadership Tracker, based on CCTV Xinwen Lianbo
 transcripts." Source transcripts are © CCTV; this project is for research and
 educational use and is not affiliated with CCTV.
+
+The site is deliberately unlisted from search engines
+(`<meta name="robots" content="noindex, nofollow">`): it is shared by direct
+link rather than discovered by search. A `robots.txt` wouldn't work here —
+crawlers read it only at the origin root, which a project Pages site doesn't
+control.
