@@ -14,6 +14,9 @@ on:
       rmrb_translate_limit:
         description: "Max People's Daily articles to translate this run (0 = skip)"
         default: "300"
+      rmrb_max_days:
+        description: "Max dates to fetch this run (0 = none)"
+        default: "60"
 
 permissions:
   contents: write
@@ -39,7 +42,7 @@ jobs:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
           TRANSLATE_MODEL: ${{ vars.TRANSLATE_MODEL }}
           DEEPSEEK_MODEL: ${{ vars.DEEPSEEK_MODEL }}
-        run: python scripts/rmrb_build.py --translate-limit ${{ github.event.inputs.rmrb_translate_limit || '300' }}
+        run: python scripts/rmrb_build.py --translate-limit ${{ github.event.inputs.rmrb_translate_limit || '300' }} --max-days ${{ github.event.inputs.rmrb_max_days || '60' }}
 
       - name: Commit rmrb data
         run: |
