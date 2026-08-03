@@ -1,7 +1,7 @@
 # CLAUDE.md — China Leadership Tracker (public site repo)
 
 Public, daily-updating database of Chinese leaders' activities built from CCTV
-*Xinwen Lianbo* transcripts. Live site: https://nelsonwang222.github.io/china-leadership-tracker/
+*Xinwen Lianbo* transcripts and People's Daily front pages. Live site: https://nelsonwang222.github.io/china-leadership-tracker/
 (GitHub Pages from `docs/` on `main`). Owner: nelsonwang222.
 
 **Split-repo setup (since 2026-07-05):** this repo holds only the static site
@@ -69,6 +69,41 @@ Key frontend facts (state as of 2026-07-08):
   tracker"). Tokens live in `docs/style.css` (`--bg/--panel/--line/--ink/
   --muted/--faint/--accent`, dark default + light via `html[data-theme]`);
   fonts Newsreader + IBM Plex Mono from Google Fonts.
+
+## People's Daily front-page source (since 2026-08)
+
+`scripts/rmrb_build.py` is a self-contained, stdlib-only scanner for the
+People's Daily e-paper front page (paper.people.com.cn/rmrb/pc). It is the
+only data-generating code that lives in this public repo - the XWLB pipeline
+stays private. Facts worth preserving:
+
+- The free e-paper PC layout archive starts 2024-12-01; older interfaces
+  return 403 to automated clients. The scanner backfills from 2026-07-01
+  (chosen for v1) and resumes from `rmrb/records.jsonl` after any interruption.
+- The paper site anti-bots after a burst of requests. Keep `--sleep` at
+  >= 0.5s, cap runs with `--max-days`, stop after consecutive misses, and let
+  the next scheduled run self-heal.
+- Data files: `rmrb/records.jsonl` (raw, append-only), `rmrb/translations.jsonl`
+  (translation cache, append-only), `rmrb/checked.json` (empty-date memory,
+  TTL 7 days), and built `docs/data/rmrb/{index.json, events-YYYY.json,
+  meta.json}`. The rmrb workflow only writes these paths, so it never
+  conflicts with update.yml's `docs/data/index.json` +
+  `docs/data/events-YYYY.json`.
+- The rmrb workflow runs at 05:30 and 23:30 Beijing time. Today is never
+  tombstoned as empty (the 05:30 run can legitimately run before the paper is
+  posted), and dates whose articles partially failed stay retryable instead of
+  being marked complete.
+- Translation supports Claude, Gemini, or DeepSeek (`DEEPSEEK_API_KEY`,
+  default model `deepseek-chat`); precedence is Claude > Gemini > DeepSeek.
+- Frontend contract: app.js loads `data/rmrb/index.json` + `data/rmrb/meta.json`,
+  tags every row `source` ("xwlb"/"rmrb"), and merges rmrb shards into
+  `loadYearDetail()`. Any UI change that talks about counts or sources must
+  handle both feeds.
+- RMRB rows are typed `article`; actor/mention tagging is exact-name with a
+  small boilerplate exclusion (e.g.
+  习近平新时代中国特色社会主义思想
+  is not a mention). This is deliberately simpler than the XWLB pipeline's
+  classifier and can be refined later.
 
 ## Lessons learned (change future behavior)
 
@@ -138,3 +173,5 @@ Key frontend facts (state as of 2026-07-08):
     (uncompressed) zip entries + a CRC32 table + inline-string sheet XML is
     ~130 lines and opens fine in Excel with CJK intact. Validate with
     Python zipfile + ElementTree, not by eyeballing.
+
+- Two write workflows on one repo: keep them on disjoint paths (XWLB: docs/data/index.json + events-YYYY.json; RMRB: rmrb/ + docs/data/rmrb/). Same `git pull --rebase -X theirs` retry pattern; conflicts should never arise.
