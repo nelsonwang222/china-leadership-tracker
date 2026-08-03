@@ -1,0 +1,67 @@
+name: People's Daily front-page update
+
+# Scans the People's Daily e-paper front page (paper.people.com.cn) and
+# publishes docs/data/rmrb/ plus the append-only rmrb/ records. Runs in this
+# public repo, independently of the XWLB daily update, and only ever touches
+# paths disjoint from update.yml (rmrb/, docs/data/rmrb/).
+
+on:
+  schedule:
+    - cron: "30 21 * * *"  # 05:30 Beijing (morning paper)
+    - cron: "30 15 * * *"  # 23:30 Beijing (catch-up)
+  workflow_dispatch:
+    inputs:
+      rmrb_translate_limit:
+        description: "Max People's Daily articles to translate this run (0 = skip)"
+        default: "300"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: rmrb-update
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Build People's Daily front-page data
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          TRANSLATE_MODEL: ${{ vars.TRANSLATE_MODEL }}
+        run: python scripts/rmrb_build.py --translate-limit ${{ github.event.inputs.rmrb_translate_limit || '300' }}
+
+      - name: Commit rmrb data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add rmrb
+          if [ -d docs/data/rmrb ]; then git add docs/data/rmrb; fi
+          git diff --cached --quiet && echo "No changes." && exit 0
+          git commit -m "People's Daily front-page update $(date -u +%F)"
+          # The remote may have moved while this run was working; rebase
+          # (preferring this run's freshly built files) and retry.
+          for i in 1 2 3; do
+            git push && exit 0
+            git pull --rebase -X theirs origin main
+          done
+          git push
+
+  # GITHUB_TOKEN pushes don't trigger pages.yml's push event, so deploy
+  # explicitly after publishing (also redeploys when there were no changes;
+  # that's a harmless no-op upload).
+  deploy:
+    needs: update
+    uses: ./.github/workflows/pages.yml
+    permissions:
+      contents: read
+      pages: write
+      id-token: write

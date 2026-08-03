@@ -118,6 +118,11 @@ h1.display.sub { font-size: 52px; line-height: 1.04; margin-bottom: 16px; }
   max-width: 1180px; margin: 0 auto; padding: 14px 28px;
   display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
 }
+.filterbar .src-row { padding-top: 0; padding-bottom: 14px; }
+.filterbar .src-row .lab {
+  font-family: 'IBM Plex Mono', monospace; font-size: 11px;
+  letter-spacing: 0.1em; color: var(--faint); margin-right: 4px;
+}
 .search-wrap { position: relative; flex: 1; min-width: 240px; }
 .search-wrap .glyph {
   position: absolute; left: 13px; top: 50%; transform: translateY(-50%);
@@ -245,6 +250,8 @@ main.list { padding: 8px 0 96px; }
 }
 .chip i { width: 6px; height: 6px; border-radius: 1px; background: var(--faint); }
 .chip.act i { background: var(--accent); }
+.chip.src-rmrb { border-color: var(--accent); color: var(--accent); }
+.chip.src-rmrb i { background: var(--accent); }
 .code { font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.1em; color: var(--faint); }
 
 .ev h3 {
