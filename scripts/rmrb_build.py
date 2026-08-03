@@ -360,6 +360,42 @@ def translate_with_gemini(
     return parse_translation_json(text)
 
 
+def translate_with_deepseek(
+    title_zh: str, content_zh: str, api_key: str, model: str
+) -> dict | None:
+    prompt = _translate_prompt(title_zh, content_zh)
+    payload = {
+        "model": model,
+        "max_tokens": 500,
+        "temperature": 0.2,
+        "messages": [
+            {
+                "role": "system",
+                "content": (
+                    "You are the translation engine for the China Leadership "
+                    "Tracker, a research database of Chinese leaders' public "
+                    "activities. Translate accurately and neutrally. Reply "
+                    "with JSON only."
+                ),
+            },
+            {"role": "user", "content": prompt},
+        ],
+        "response_format": {"type": "json_object"},
+    }
+    req = urllib.request.Request(
+        "https://api.deepseek.com/chat/completions",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}",
+        },
+    )
+    with urllib.request.urlopen(req, timeout=60) as resp:
+        data = json.loads(resp.read().decode("utf-8"))
+    text = data["choices"][0]["message"]["content"]
+    return parse_translation_json(text)
+
+
 def _translate_prompt(title_zh: str, content_zh: str) -> str:
     return (
         "Translate this People's Daily front-page article for an English-"
@@ -401,14 +437,22 @@ def translate_new_records(
     """Translate records missing a cache entry; return number attempted."""
     anthropic_key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
     gemini_key = os.environ.get("GEMINI_API_KEY", "").strip()
+    deepseek_key = os.environ.get("DEEPSEEK_API_KEY", "").strip()
     model = os.environ.get("TRANSLATE_MODEL", "").strip()
+    deepseek_model = os.environ.get("DEEPSEEK_MODEL", "").strip() or "deepseek-chat"
     if limit <= 0:
         return 0
-    if not anthropic_key and not gemini_key:
+    if not (anthropic_key or gemini_key or deepseek_key):
         print("No translation API key set; skipping translation.")
         return 0
     use_anthropic = bool(anthropic_key)
-    model = model or ("claude-opus-4-8" if use_anthropic else "gemini-2.5-flash")
+    use_gemini = bool(gemini_key and not anthropic_key)
+    use_deepseek = not use_anthropic and not use_gemini
+    model = model or (
+        "claude-opus-4-8" if use_anthropic
+        else "gemini-2.5-flash" if use_gemini
+        else deepseek_model
+    )
     pending = [r for r in records if r["id"] not in translations]
     pending.sort(key=lambda r: (r["date"], r["id"]), reverse=True)  # newest first
     attempted = 0
@@ -416,8 +460,10 @@ def translate_new_records(
         try:
             if use_anthropic:
                 t = translate_with_anthropic(r["title_zh"], r["content_zh"], anthropic_key, model)
-            else:
+            elif use_gemini:
                 t = translate_with_gemini(r["title_zh"], r["content_zh"], gemini_key, model)
+            else:
+                t = translate_with_deepseek(r["title_zh"], r["content_zh"], deepseek_key, model)
         except Exception as e:  # noqa: BLE001 - keep going; next run retries
             print(f"WARN translate {r['id']} failed: {e}", file=sys.stderr)
             attempted += 1

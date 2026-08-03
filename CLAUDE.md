@@ -93,6 +93,8 @@ stays private. Facts worth preserving:
   tombstoned as empty (the 05:30 run can legitimately run before the paper is
   posted), and dates whose articles partially failed stay retryable instead of
   being marked complete.
+- Translation supports Claude, Gemini, or DeepSeek (`DEEPSEEK_API_KEY`,
+  default model `deepseek-chat`); precedence is Claude > Gemini > DeepSeek.
 - Frontend contract: app.js loads `data/rmrb/index.json` + `data/rmrb/meta.json`,
   tags every row `source` ("xwlb"/"rmrb"), and merges rmrb shards into
   `loadYearDetail()`. Any UI change that talks about counts or sources must

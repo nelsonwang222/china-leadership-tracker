@@ -1,0 +1,42 @@
+name: CI
+
+# Runs the Python unit tests and a frontend syntax check on PRs and pushes
+# that touch the scanner, frontend, or workflow files.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/**"
+      - "docs/app.js"
+      - "docs/index.html"
+      - "docs/style.css"
+      - ".github/workflows/ci.yml"
+      - ".github/workflows/rmrb.yml"
+  pull_request:
+    paths:
+      - "scripts/**"
+      - "docs/app.js"
+      - "docs/index.html"
+      - "docs/style.css"
+      - ".github/workflows/ci.yml"
+      - ".github/workflows/rmrb.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Python unit tests
+        run: python -m unittest discover -s scripts/tests -p "test_*.py"
+
+      - name: Frontend syntax check
+        run: node --check docs/app.js

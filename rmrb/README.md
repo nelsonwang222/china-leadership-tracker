@@ -15,6 +15,7 @@ Append-only state for the People's Daily (人民日报) front-page scanner.
 Built site data (the actual deliverable) is generated from these files into
 `docs/data/rmrb/` by `scripts/rmrb_build.py`. The files here are committed so
 every daily run is incremental: articles are fetched once and translated once.
+Translation supports Claude, Gemini, or DeepSeek (`DEEPSEEK_API_KEY`).
 
 Run the scanner locally with:
 

@@ -100,10 +100,11 @@ Both chains deploy `docs/` to GitHub Pages (`pages.yml`).
 Fluent English titles and summaries are produced by an LLM when an API-key
 secret is set (this repo → Settings → Secrets and variables → Actions):
 
-- `GEMINI_API_KEY` (currently active; default model `gemini-2.5-flash`) or
-  `ANTHROPIC_API_KEY` (Claude, default `claude-opus-4-8`). If both are set,
-  Claude is used. Override the model with a repository variable
-  `TRANSLATE_MODEL`.
+- `GEMINI_API_KEY` (default model `gemini-2.5-flash`),
+  `ANTHROPIC_API_KEY` (Claude, default `claude-opus-4-8`), or
+  `DEEPSEEK_API_KEY` (DeepSeek, default `deepseek-chat`). Precedence:
+  Claude > Gemini > DeepSeek. Override any model with `TRANSLATE_MODEL`;
+  DeepSeek's model can also be set with `DEEPSEEK_MODEL`.
 - XWLB runs translate a batch of untranslated events, newest first, and cache
   results — an event is only ever translated once. The People's Daily run has
   its own `rmrb_translate_limit` input (default 300) and caches in
