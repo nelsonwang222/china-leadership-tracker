@@ -24,6 +24,7 @@ const state = {
   leadersById: {},
   typeLabels: {},
   meta: {},
+  rmrbMeta: {},
   filtered: [],
   monthCounts: new Map(),
   shown: 0,
@@ -67,33 +68,41 @@ function wireSwitch(el, onChange) {
 /* ---------------- load ---------------- */
 async function boot() {
   initTheme();
-  const [meta, leaders, index] = await Promise.all([
+  const [meta, leaders, index, rmrbMeta, rmrbIndex] = await Promise.all([
     fetch("data/meta.json").then((r) => r.json()),
     fetch("data/leaders.json").then((r) => r.json()),
     fetch("data/index.json").then((r) => r.json()),
+    fetch("data/rmrb/meta.json").then((r) => r.json()).catch(() => null),
+    fetch("data/rmrb/index.json").then((r) => r.json()).catch(() => null),
   ]);
   state.meta = meta;
+  state.rmrbMeta = rmrbMeta || { built_at: meta.built_at, n_events: 0, n_days: 0, years: [] };
   state.leaders = leaders;
   for (const p of leaders) state.leadersById[p.id] = p;
   state.typeLabels = index.types;
 
-  state.events = index.events.map((row) => {
+  const parseRow = (row, source) => {
     const [id, date, type, activity, titleZh, titleEn, summaryEn,
            leaders_, mentions, counterpart, location] = row;
     return {
-      id, date, type, activity: !!activity,
+      id, date, type, activity: !!activity, source,
       titleZh, titleEn, summaryEn, counterpart, location,
       leaders: leaders_ ? leaders_.split(",") : [],
       mentions: mentions ? mentions.split(",") : [],
       hay: null,
     };
-  });
+  };
+  state.events = [];
+  for (const row of index.events) state.events.push(parseRow(row, "xwlb"));
+  if (rmrbIndex && Array.isArray(rmrbIndex.events))
+    for (const row of rmrbIndex.events) state.events.push(parseRow(row, "rmrb"));
   state.events.sort((a, b) => (a.date < b.date ? 1 : -1)); // newest first
 
-  $("#upd-label").textContent = `UPD ${meta.built_at.slice(0, 10)}`;
-  $("#stat-events").textContent = meta.n_events.toLocaleString();
+  const upd = state.rmrbMeta.built_at > meta.built_at ? state.rmrbMeta.built_at : meta.built_at;
+  $("#upd-label").textContent = `UPD ${upd.slice(0, 10)}`;
+  $("#stat-events").textContent = (meta.n_events + state.rmrbMeta.n_events).toLocaleString();
   $("#stat-leaders").textContent = state.leaders.length;
-  $("#stat-days").textContent = meta.n_days.toLocaleString();
+  $("#stat-days").textContent = new Set(state.events.map((e) => e.date)).size.toLocaleString();
 
   buildFilters();
   buildLeadersView();
@@ -123,7 +132,9 @@ function glossEn(e) {
 function haystack(e) {
   if (e.hay) return e.hay;
   const parts = [e.titleZh, e.titleEn, e.summaryEn, e.counterpart, e.location,
-                 e.date, state.typeLabels[e.type] || e.type];
+                 e.date, state.typeLabels[e.type] || e.type,
+                 e.source === "rmrb" ? "rmrb people's daily 人民日报"
+                                     : "xwlb xinwen lianbo 新闻联播"];
   for (const id of e.leaders.concat(e.mentions)) {
     const p = state.leadersById[id];
     if (p) parts.push(p.name_en, p.name_zh);
@@ -134,14 +145,17 @@ function haystack(e) {
 
 function loadYearDetail(year) {
   if (!state.yearDetail[year])
-    state.yearDetail[year] = fetch(`data/events-${year}.json`).then((r) => r.json());
+    state.yearDetail[year] = Promise.all([
+      fetch(`data/events-${year}.json`).then((r) => r.json()).catch(() => ({})),
+      fetch(`data/rmrb/events-${year}.json`).then((r) => r.json()).catch(() => ({})),
+    ]).then(([xwlb, rmrb]) => Object.assign({}, xwlb, rmrb));
   return state.yearDetail[year];
 }
 
 // Full-text search is on by default, so quietly warm the transcript cache
 // (newest year first) shortly after load; searches reuse the same promises.
 function prefetchTranscripts() {
-  const years = [...state.meta.years].reverse();
+  const years = [...new Set([...(state.rmrbMeta.years || []), ...state.meta.years])].reverse();
   let i = 0;
   const next = () => {
     if (i >= years.length) return;
@@ -183,6 +197,7 @@ function buildFilters() {
   for (const id of ["#f-leader", "#f-type", "#f-date-from", "#f-date-to"])
     $(id).addEventListener("change", applyFilters);
   wireRadio(["#f-actor", "#f-mention", "#f-fulltext"], applyFilters);
+  wireRadio(["#f-src-all", "#f-src-xwlb", "#f-src-rmrb"], applyFilters);
   $("#more-btn").addEventListener("click", () => renderList(true));
   wireExport();
 }
@@ -197,13 +212,15 @@ async function applyFilters() {
   const d1 = $("#f-date-to").value || state.meta.last_date;
   const mode = switchOn($("#f-mention")) ? "mention"
              : switchOn($("#f-fulltext")) ? "fulltext" : "actor";
+  const source = switchOn($("#f-src-xwlb")) ? "xwlb"
+               : switchOn($("#f-src-rmrb")) ? "rmrb" : "";
   const fullText = mode === "fulltext";
 
   // Full-text mode: make sure the transcript shards for the selected date
   // range are loaded before filtering (cached after first use).
   let contentByYear = null;
   if (fullText && q) {
-    const years = state.meta.years.filter(
+    const years = [...new Set([...(state.rmrbMeta.years || []), ...state.meta.years])].filter(
       (y) => y >= d0.slice(0, 4) && y <= d1.slice(0, 4));
     $("#result-count").textContent = "LOADING FULL TRANSCRIPTS…";
     contentByYear = {};
@@ -216,6 +233,7 @@ async function applyFilters() {
   state.filtered = state.events.filter((e) => {
     if (e.date < d0 || e.date > d1) return false;
     if (type && e.type !== type) return false;
+    if (source && e.source !== source) return false;
     if (leader) {
       const asActor = e.leaders.includes(leader);
       const asMention = e.mentions.includes(leader);
@@ -285,6 +303,7 @@ function eventCard(e) {
     <div>
       <div class="ev-meta">
         <span class="chip${e.activity ? " act" : ""}"><i></i>${esc((state.typeLabels[e.type] || e.type).toUpperCase())}</span>
+        <span class="chip src-${e.source}"><i></i>${e.source.toUpperCase()}</span>
         <span class="code">${TYPE_CODES[e.type] || "OTH"}·${e.id}</span>
         ${e.location ? `<span class="code">📍 ${esc(e.location)}</span>` : ""}
       </div>
@@ -313,8 +332,15 @@ async function toggleDetail(card, e) {
   box.innerHTML = html;
   try {
     const detail = await loadYearDetail(e.date.slice(0, 4));
+    const det = detail[e.id] || {};
+    if (e.source === "rmrb" && det.url) {
+      const src = document.createElement("div");
+      src.className = "lab src-link";
+      src.innerHTML = `SOURCE: <a href="${esc(det.url)}" target="_blank" rel="noopener">PEOPLE'S DAILY FRONT PAGE</a>`;
+      box.prepend(src);
+    }
     const el = document.getElementById(`zh-${e.id}`);
-    if (el) el.textContent = (detail[e.id] || {}).content_zh || "(unavailable)";
+    if (el) el.textContent = det.content_zh || "(unavailable)";
   } catch {
     const el = document.getElementById(`zh-${e.id}`);
     if (el) el.textContent = "(failed to load)";
@@ -420,7 +446,7 @@ function buildLeadersView() {
 
 /* ---------------- network view ---------------- */
 function buildNetworkControls() {
-  const years = state.meta.years;
+  const years = [...new Set([...(state.rmrbMeta.years || []), ...state.meta.years])].sort();
   for (const [sel, def] of [["#n-year-from", years[years.length - 4] || years[0]],
                             ["#n-year-to", years[years.length - 1]]]) {
     const el = $(sel);
@@ -434,15 +460,19 @@ function buildNetworkControls() {
   for (const id of ["#n-year-from", "#n-year-to", "#n-min"])
     $(id).addEventListener("change", drawNetwork);
   wireSwitch($("#n-mentions"), drawNetwork);
+  wireRadio(["#n-src-all", "#n-src-xwlb", "#n-src-rmrb"], drawNetwork);
 }
 
 function computeGraph() {
   const y0 = $("#n-year-from").value, y1 = $("#n-year-to").value;
   const minW = Math.max(1, +$("#n-min").value || 1);
   const useMentions = switchOn($("#n-mentions"));
+  const src = switchOn($("#n-src-xwlb")) ? "xwlb"
+            : switchOn($("#n-src-rmrb")) ? "rmrb" : "";
   const pair = new Map(), nodeCount = new Map();
   for (const e of state.events) {
     if (!e.activity) continue;
+    if (src && e.source !== src) continue;
     const y = e.date.slice(0, 4);
     if (y < y0 || y > y1) continue;
     const ppl = useMentions ? e.leaders.concat(e.mentions) : e.leaders;
@@ -778,7 +808,7 @@ function exportXlsx() {
   const leader = $("#f-leader").value;
   const modeLabel = switchOn($("#f-mention")) ? "Mentioned"
                   : switchOn($("#f-fulltext")) ? "Full text" : "Primary actor";
-  const rows = [["Date", "Type", "Mode", "Title (ZH)", "Title (EN)",
+  const rows = [["Date", "Type", "Mode", "Source", "Title (ZH)", "Title (EN)",
                  "Summary (EN)", "Leaders", "Mentions", "Counterpart",
                  "Location", "Event ID"]];
   for (const e of state.filtered) {
@@ -793,6 +823,7 @@ function exportXlsx() {
       e.date,
       state.typeLabels[e.type] || e.type,
       mode,
+      e.source.toUpperCase(),
       e.titleZh,
       e.titleEn || "",
       e.summaryEn || "",
